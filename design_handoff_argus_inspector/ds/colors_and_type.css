@@ -1,0 +1,595 @@
+/* ============================================================
+   Argus Design System — colors_and_type.css
+   Developer tool. Calm, information-dense, keyboard-first.
+   Base unit: 4px.  Two modes: light (default) + dark.
+   ============================================================ */
+
+/* ---------- Fonts ---------- */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/Inter-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/Inter-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/Inter-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/Inter-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/JetBrainsMono-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/JetBrainsMono-Bold.woff2') format('woff2');
+}
+
+/* ============================================================
+   Raw color scales. Never referenced directly outside this file.
+   Designed so semantic pairs hit WCAG AA on light + dark surfaces.
+   ============================================================ */
+:root {
+  /* Neutrals — cool, slight blue tint, sampled toward Linear/Raycast */
+  --gray-0:  #ffffff;
+  --gray-25: #fafbfc;
+  --gray-50: #f5f6f8;
+  --gray-75: #eef0f3;
+  --gray-100:#e4e7eb;
+  --gray-150:#d4d8de;
+  --gray-200:#bcc1c8;
+  --gray-300:#9aa0a9;
+  --gray-400:#757a83;
+  --gray-500:#5a5f67;
+  --gray-600:#434850;
+  --gray-700:#30343b;
+  --gray-800:#22262c;
+  --gray-850:#1a1d22;
+  --gray-900:#141618;
+  --gray-950:#0e0f11;
+
+  /* Accent blue — Argus signature. Calm, not saturated. */
+  --blue-50: #eef4ff;
+  --blue-100:#dbe6ff;
+  --blue-200:#b3c9ff;
+  --blue-300:#7da3ff;
+  --blue-400:#4e82f5;
+  --blue-500:#2f68e0;      /* primary on light */
+  --blue-600:#2455be;
+  --blue-700:#1e4599;
+  --blue-800:#183675;
+  --blue-900:#122753;
+
+  /* Green — 2xx success */
+  --green-50: #e9f7ee;
+  --green-100:#c8ecd3;
+  --green-300:#5bb883;
+  --green-500:#2f9457;
+  --green-600:#23774a;
+  --green-700:#1a5a38;
+  --green-800:#114028;
+
+  /* Amber — 4xx warning, log warn */
+  --amber-50: #fff4db;
+  --amber-100:#ffe4a6;
+  --amber-300:#d9a23d;
+  --amber-500:#a6761a;
+  --amber-600:#845a10;
+  --amber-700:#60410b;
+  --amber-800:#3f2a06;
+
+  /* Red — 5xx danger, log error */
+  --red-50:  #fdecec;
+  --red-100: #fbd0cf;
+  --red-300: #e36a66;
+  --red-500: #c5342e;
+  --red-600: #9e2621;
+  --red-700: #761b17;
+  --red-800: #50110e;
+
+  /* Violet — source badge CUSTOM, colorblind-safe distinct from blue */
+  --violet-50: #f2edff;
+  --violet-100:#dfd1ff;
+  --violet-300:#a88cff;
+  --violet-500:#6c4fd6;
+  --violet-600:#533cad;
+  --violet-700:#3e2c84;
+  --violet-800:#2a1e5b;
+
+  /* Teal — source badge LOG, distinct from green status */
+  --teal-50:  #dff5f3;
+  --teal-100: #b4e8e3;
+  --teal-300: #55b8b0;
+  --teal-500: #0f8b82;
+  --teal-600: #0a6e67;
+  --teal-700: #07524d;
+  --teal-800: #053734;
+}
+
+/* ============================================================
+   Semantic tokens — LIGHT MODE (default).
+   Always reference these, never the raw scales.
+   ============================================================ */
+:root, .theme-light {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg-app:          var(--gray-25);    /* outermost */
+  --bg-panel:        var(--gray-0);     /* list, detail */
+  --bg-subtle:       var(--gray-50);    /* section header strip */
+  --bg-sunken:       var(--gray-75);    /* body viewer frame */
+  --bg-overlay:      var(--gray-0);     /* dropdowns, popovers */
+  --bg-hover:        rgba(20, 22, 24, 0.04);
+  --bg-active:       rgba(20, 22, 24, 0.07);
+  --bg-selected:     #e5efff;
+  --bg-selected-kb:  #d8e5ff;           /* keyboard-focused selected row */
+
+  /* Borders & dividers */
+  --border-subtle:   var(--gray-75);
+  --border-default:  var(--gray-100);
+  --border-strong:   var(--gray-200);
+  --border-focus:    var(--blue-500);
+
+  /* Foreground text */
+  --fg-1:            var(--gray-900);   /* primary */
+  --fg-2:            var(--gray-600);   /* secondary */
+  --fg-3:            var(--gray-400);   /* tertiary, axis labels */
+  --fg-muted:        var(--gray-300);
+  --fg-disabled:     var(--gray-200);
+  --fg-on-accent:    var(--gray-0);
+  --fg-link:         var(--blue-600);
+
+  /* Accent / interactive */
+  --accent-fg:       var(--blue-600);
+  --accent-bg:       var(--blue-500);
+  --accent-bg-hover: var(--blue-600);
+  --accent-bg-active:var(--blue-700);
+  --accent-subtle:   var(--blue-50);
+  --accent-border:   var(--blue-200);
+
+  /* ---- Status: HTTP response classes ---- */
+  --status-2xx-fg:   var(--green-600);
+  --status-2xx-bg:   var(--green-50);
+  --status-2xx-dot:  var(--green-500);
+
+  --status-3xx-fg:   var(--blue-700);
+  --status-3xx-bg:   var(--blue-50);
+  --status-3xx-dot:  var(--blue-500);
+
+  --status-4xx-fg:   var(--amber-600);
+  --status-4xx-bg:   var(--amber-50);
+  --status-4xx-dot:  var(--amber-500);
+
+  --status-5xx-fg:   var(--red-600);
+  --status-5xx-bg:   var(--red-50);
+  --status-5xx-dot:  var(--red-500);
+
+  --status-err-fg:   var(--gray-600);
+  --status-err-bg:   var(--gray-75);
+  --status-err-dot:  var(--gray-400);
+
+  /* ---- Log levels ---- */
+  --log-error-fg:    var(--red-600);
+  --log-error-bg:    var(--red-50);
+  --log-warn-fg:     var(--amber-600);
+  --log-warn-bg:     var(--amber-50);
+  --log-info-fg:     var(--gray-700);
+  --log-info-bg:     var(--gray-50);
+  --log-debug-fg:    var(--gray-500);
+  --log-debug-bg:    var(--gray-50);
+  --log-verbose-fg:  var(--gray-400);
+  --log-verbose-bg:  transparent;
+
+  /* ---- Source badges (HTTP / LOG / CUSTOM) ---- */
+  --src-http-fg:     var(--blue-700);
+  --src-http-bg:     var(--blue-50);
+  --src-http-brd:    var(--blue-200);
+  --src-log-fg:      var(--teal-600);
+  --src-log-bg:      var(--teal-50);
+  --src-log-brd:     #9ad8d3;
+  --src-custom-fg:   var(--violet-600);
+  --src-custom-bg:   var(--violet-50);
+  --src-custom-brd:  #c4b2ff;
+
+  /* ---- Method badges (HTTP) ---- */
+  --method-get-fg:   var(--green-600);
+  --method-post-fg:  var(--blue-600);
+  --method-put-fg:   var(--amber-600);
+  --method-patch-fg: var(--violet-600);
+  --method-del-fg:   var(--red-600);
+  --method-head-fg:  var(--gray-500);
+  --method-opt-fg:   var(--gray-500);
+
+  /* ---- Waterfall segments ---- */
+  --wf-dns:          #7da3ff;
+  --wf-connect:      #b3c9ff;
+  --wf-tls:          #a88cff;
+  --wf-send:         #c8ecd3;
+  --wf-wait:         #ffe4a6;
+  --wf-receive:      var(--green-500);
+  --wf-axis:         var(--gray-200);
+  --wf-tick:         var(--gray-400);
+  --wf-zero:         var(--gray-300);   /* zero-duration marker */
+
+  /* ---- Connection state ---- */
+  --conn-ok-fg:      var(--green-600);
+  --conn-ok-dot:     var(--green-500);
+  --conn-reco-fg:    var(--amber-600);
+  --conn-reco-dot:   var(--amber-500);
+  --conn-off-fg:     var(--gray-500);
+  --conn-off-dot:    var(--gray-400);
+
+  /* ---- Syntax (JSON / body viewer) ---- */
+  --syn-key:         var(--gray-900);
+  --syn-string:      #0a6e67;
+  --syn-number:      #2455be;
+  --syn-bool:        #6c4fd6;
+  --syn-null:        var(--gray-400);
+  --syn-punct:       var(--gray-400);
+  --syn-match:       #fff3c2;
+
+  /* ---- Shadow system (restrained) ---- */
+  --shadow-xs: 0 1px 0 rgba(20,22,24,0.04);
+  --shadow-sm: 0 1px 2px rgba(20,22,24,0.06), 0 0 0 0.5px rgba(20,22,24,0.04);
+  --shadow-md: 0 4px 12px rgba(20,22,24,0.08), 0 0 0 0.5px rgba(20,22,24,0.06);
+  --shadow-lg: 0 12px 32px rgba(20,22,24,0.12), 0 0 0 0.5px rgba(20,22,24,0.06);
+  --shadow-focus: 0 0 0 2px rgba(47,104,224,0.35);
+}
+
+/* ============================================================
+   Semantic tokens — DARK MODE
+   ============================================================ */
+.theme-dark {
+  color-scheme: dark;
+
+  --bg-app:          var(--gray-950);
+  --bg-panel:        var(--gray-900);
+  --bg-subtle:       var(--gray-850);
+  --bg-sunken:       var(--gray-950);
+  --bg-overlay:      var(--gray-850);
+  --bg-hover:        rgba(255,255,255,0.04);
+  --bg-active:       rgba(255,255,255,0.07);
+  --bg-selected:     #1c2a44;
+  --bg-selected-kb:  #24385c;
+
+  --border-subtle:   var(--gray-850);
+  --border-default:  var(--gray-800);
+  --border-strong:   var(--gray-700);
+  --border-focus:    var(--blue-400);
+
+  --fg-1:            #e8eaed;
+  --fg-2:            #a6abb3;
+  --fg-3:            #757a83;
+  --fg-muted:        var(--gray-500);
+  --fg-disabled:     var(--gray-700);
+  --fg-on-accent:    var(--gray-0);
+  --fg-link:         var(--blue-300);
+
+  --accent-fg:       var(--blue-300);
+  --accent-bg:       var(--blue-500);
+  --accent-bg-hover: var(--blue-400);
+  --accent-bg-active:var(--blue-300);
+  --accent-subtle:   rgba(47,104,224,0.14);
+  --accent-border:   rgba(125,163,255,0.35);
+
+  --status-2xx-fg:   #8bd1a4;
+  --status-2xx-bg:   rgba(47,148,87,0.14);
+  --status-2xx-dot:  var(--green-300);
+
+  --status-3xx-fg:   #9fbcff;
+  --status-3xx-bg:   rgba(47,104,224,0.16);
+  --status-3xx-dot:  var(--blue-300);
+
+  --status-4xx-fg:   #e6b861;
+  --status-4xx-bg:   rgba(166,118,26,0.18);
+  --status-4xx-dot:  var(--amber-300);
+
+  --status-5xx-fg:   #ef8984;
+  --status-5xx-bg:   rgba(197,52,46,0.18);
+  --status-5xx-dot:  var(--red-300);
+
+  --status-err-fg:   var(--gray-300);
+  --status-err-bg:   var(--gray-800);
+  --status-err-dot:  var(--gray-400);
+
+  --log-error-fg:    #ef8984;
+  --log-error-bg:    rgba(197,52,46,0.16);
+  --log-warn-fg:     #e6b861;
+  --log-warn-bg:     rgba(166,118,26,0.14);
+  --log-info-fg:     #d0d3d8;
+  --log-info-bg:     transparent;
+  --log-debug-fg:    #8c9098;
+  --log-debug-bg:    transparent;
+  --log-verbose-fg:  #6a6f77;
+  --log-verbose-bg:  transparent;
+
+  --src-http-fg:     #9fbcff;
+  --src-http-bg:     rgba(47,104,224,0.18);
+  --src-http-brd:    rgba(125,163,255,0.30);
+  --src-log-fg:      #74cfc7;
+  --src-log-bg:      rgba(15,139,130,0.18);
+  --src-log-brd:     rgba(85,184,176,0.30);
+  --src-custom-fg:   #bca5ff;
+  --src-custom-bg:   rgba(108,79,214,0.20);
+  --src-custom-brd:  rgba(168,140,255,0.32);
+
+  --method-get-fg:   #8bd1a4;
+  --method-post-fg:  #9fbcff;
+  --method-put-fg:   #e6b861;
+  --method-patch-fg: #bca5ff;
+  --method-del-fg:   #ef8984;
+  --method-head-fg:  var(--gray-400);
+  --method-opt-fg:   var(--gray-400);
+
+  --wf-dns:          #4e82f5;
+  --wf-connect:      #7da3ff;
+  --wf-tls:          #a88cff;
+  --wf-send:         #5bb883;
+  --wf-wait:         #d9a23d;
+  --wf-receive:      #8bd1a4;
+  --wf-axis:         var(--gray-700);
+  --wf-tick:         var(--gray-500);
+  --wf-zero:         var(--gray-500);
+
+  --conn-ok-fg:      #8bd1a4;
+  --conn-ok-dot:     var(--green-300);
+  --conn-reco-fg:    #e6b861;
+  --conn-reco-dot:   var(--amber-300);
+  --conn-off-fg:     var(--gray-400);
+  --conn-off-dot:    var(--gray-500);
+
+  --syn-key:         #e8eaed;
+  --syn-string:      #74cfc7;
+  --syn-number:      #9fbcff;
+  --syn-bool:        #bca5ff;
+  --syn-null:        var(--gray-500);
+  --syn-punct:       var(--gray-500);
+  --syn-match:       rgba(217,162,61,0.30);
+
+  --shadow-xs: 0 1px 0 rgba(0,0,0,0.35);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(255,255,255,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.50), 0 0 0 0.5px rgba(255,255,255,0.04);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.60), 0 0 0 0.5px rgba(255,255,255,0.04);
+  --shadow-focus: 0 0 0 2px rgba(78,130,245,0.55);
+}
+
+/* Auto-follow system preference when no explicit .theme-* class */
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light):not(.theme-dark) {
+    color-scheme: dark;
+    --bg-app: var(--gray-950);
+    --bg-panel: var(--gray-900);
+    --bg-subtle: var(--gray-850);
+    --bg-sunken: var(--gray-950);
+    --bg-overlay: var(--gray-850);
+    --bg-hover: rgba(255,255,255,0.04);
+    --bg-active: rgba(255,255,255,0.07);
+    --bg-selected: #1c2a44;
+    --bg-selected-kb: #24385c;
+    --border-subtle: var(--gray-850);
+    --border-default: var(--gray-800);
+    --border-strong: var(--gray-700);
+    --border-focus: var(--blue-400);
+    --fg-1: #e8eaed;
+    --fg-2: #a6abb3;
+    --fg-3: #757a83;
+    --fg-muted: var(--gray-500);
+    --fg-disabled: var(--gray-700);
+    --fg-link: var(--blue-300);
+    --accent-fg: var(--blue-300);
+    --accent-subtle: rgba(47,104,224,0.14);
+    --accent-border: rgba(125,163,255,0.35);
+    --status-2xx-fg: #8bd1a4; --status-2xx-bg: rgba(47,148,87,0.14);
+    --status-3xx-fg: #9fbcff; --status-3xx-bg: rgba(47,104,224,0.16);
+    --status-4xx-fg: #e6b861; --status-4xx-bg: rgba(166,118,26,0.18);
+    --status-5xx-fg: #ef8984; --status-5xx-bg: rgba(197,52,46,0.18);
+    --status-err-fg: var(--gray-300); --status-err-bg: var(--gray-800);
+    --log-error-fg: #ef8984; --log-error-bg: rgba(197,52,46,0.16);
+    --log-warn-fg: #e6b861; --log-warn-bg: rgba(166,118,26,0.14);
+    --log-info-fg: #d0d3d8; --log-debug-fg: #8c9098; --log-verbose-fg: #6a6f77;
+    --src-http-fg: #9fbcff; --src-http-bg: rgba(47,104,224,0.18); --src-http-brd: rgba(125,163,255,0.30);
+    --src-log-fg: #74cfc7; --src-log-bg: rgba(15,139,130,0.18); --src-log-brd: rgba(85,184,176,0.30);
+    --src-custom-fg: #bca5ff; --src-custom-bg: rgba(108,79,214,0.20); --src-custom-brd: rgba(168,140,255,0.32);
+    --method-get-fg: #8bd1a4; --method-post-fg: #9fbcff; --method-put-fg: #e6b861;
+    --method-patch-fg: #bca5ff; --method-del-fg: #ef8984;
+    --wf-axis: var(--gray-700); --wf-tick: var(--gray-500); --wf-zero: var(--gray-500);
+    --conn-ok-fg: #8bd1a4; --conn-reco-fg: #e6b861; --conn-off-fg: var(--gray-400);
+    --syn-key: #e8eaed; --syn-string: #74cfc7; --syn-number: #9fbcff;
+    --syn-bool: #bca5ff; --syn-null: var(--gray-500); --syn-punct: var(--gray-500);
+    --syn-match: rgba(217,162,61,0.30);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(255,255,255,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.50), 0 0 0 0.5px rgba(255,255,255,0.04);
+    --shadow-lg: 0 12px 32px rgba(0,0,0,0.60), 0 0 0 0.5px rgba(255,255,255,0.04);
+    --shadow-focus: 0 0 0 2px rgba(78,130,245,0.55);
+  }
+}
+
+/* ============================================================
+   Typography
+   Scale: xs / sm / base / lg.  Most UI runs at sm.
+   ============================================================ */
+:root {
+  --font-ui:   'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --fs-xs:   11px;  --lh-xs:   16px;
+  --fs-sm:   12px;  --lh-sm:   18px;
+  --fs-base: 13px;  --lh-base: 20px;
+  --fs-lg:   15px;  --lh-lg:   22px;
+  --fs-xl:   18px;  --lh-xl:   26px;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+
+  --tracking-tight: -0.005em;
+  --tracking-normal: 0;
+  --tracking-caps:  0.04em;
+
+  /* Spacing — 4px base */
+  --sp-0:  0;
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  20px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* Control heights */
+  --ctrl-sm: 24px;
+  --ctrl-md: 28px;
+  --ctrl-lg: 32px;
+  --ctrl-xl: 40px;
+  --row-h:   32px;
+
+  /* Radii — small and restrained */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --dur-fast: 80ms;
+  --dur-base: 120ms;
+  --dur-slow: 160ms;
+  --ease-out: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================
+   Semantic typography classes
+   ============================================================ */
+body, .ds-body {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: var(--fw-regular);
+  color: var(--fg-1);
+  background: var(--bg-app);
+  font-feature-settings: 'cv11', 'ss01', 'ss03';  /* Inter: straight-sided chars */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.ds-h1 {
+  font-family: var(--font-ui);
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-1);
+}
+
+.ds-h2 {
+  font-family: var(--font-ui);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-lg);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-1);
+}
+
+.ds-h3 {
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  font-weight: var(--fw-semibold);
+  color: var(--fg-1);
+}
+
+.ds-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-3);
+}
+
+.ds-meta {
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--fg-2);
+}
+
+.ds-p {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--fg-1);
+}
+
+.ds-mono, code, kbd, samp, pre {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-feature-settings: 'liga' 0, 'calt' 0;  /* no ligatures for clarity */
+}
+
+.ds-mono-xs { font-family: var(--font-mono); font-size: var(--fs-xs); line-height: var(--lh-xs); }
+.ds-mono-sm { font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.ds-mono-base { font-family: var(--font-mono); font-size: var(--fs-base); line-height: var(--lh-base); }
+
+/* Keyboard keycap */
+kbd.ds-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--fg-2);
+  border: 1px solid var(--border-default);
+  box-shadow: inset 0 -1px 0 var(--border-default);
+  min-width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

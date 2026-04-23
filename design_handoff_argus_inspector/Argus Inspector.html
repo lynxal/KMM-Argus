@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Argus — Inspector Design</title>
+<link rel="stylesheet" href="ds/colors_and_type.css">
+<style>
+  html, body, #root { height: 100%; margin: 0; }
+  body { background: #f5f6f8; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  button:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+  @keyframes argusFadeIn { from { opacity: 0; transform: translateY(-1px); } to { opacity: 1; transform: none; } }
+  @keyframes argusPulse { 0%,100% { opacity:.4 } 50% { opacity:1 } }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; border: 2px solid var(--bg-panel); }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .argus-frame { height: 100%; width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-default); background: var(--bg-app); }
+  .argus-frame.theme-dark { border-color: #1a1d22; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="argus/data.js"></script>
+<script type="text/babel" src="argus/Primitives.jsx"></script>
+<script type="text/babel" src="argus/TopBar.jsx"></script>
+<script type="text/babel" src="argus/FilterBar.jsx"></script>
+<script type="text/babel" src="argus/EventList.jsx"></script>
+<script type="text/babel" src="argus/BodyViewer.jsx"></script>
+<script type="text/babel" src="argus/EventDetail.jsx"></script>
+<script type="text/babel" src="argus/Waterfall.jsx"></script>
+<script type="text/babel" src="argus/Overlays.jsx"></script>
+<script type="text/babel" src="argus/Inspector.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+
+<script type="text/babel">
+// TWEAKS
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "defaultTheme": "light",
+  "selectionMode": "kb",
+  "density": "compact"
+}/*EDITMODE-END*/;
+
+function Frame({ children, theme='light' }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (ref.current) {
+      ref.current.classList.toggle('theme-dark', theme === 'dark');
+      ref.current.classList.toggle('theme-light', theme === 'light');
+    }
+  }, [theme]);
+  return <div ref={ref} className={`argus-frame theme-${theme}`}>{children}</div>;
+}
+
+function App() {
+  const [theme, setTheme] = React.useState(TWEAKS.defaultTheme);
+  const [density, setDensity] = React.useState(TWEAKS.density);
+  const [selMode, setSelMode] = React.useState(TWEAKS.selectionMode);
+
+  // Tweaks panel
+  const [tweaksOn, setTweaksOn] = React.useState(false);
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setTweaksOn(true);
+      if (e.data?.type === '__deactivate_edit_mode') setTweaksOn(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+  const persist = (edits) => window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+
+  return (
+    <>
+      <DesignCanvas title="Argus — Inspector" subtitle="HTTP + application log inspector · design review" defaultBg="var(--dc-bg, #eef0f3)">
+        <DCSection id="primary" title="Primary screens">
+          <DCArtboard id="ab-split" label="Inspector · Split view (default)" width={1360} height={860}>
+            <Frame theme={theme}>
+              <Inspector initialView="split" density={density} selectionMode={selMode} initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-waterfall" label="Inspector · Waterfall" width={1360} height={860}>
+            <Frame theme={theme}>
+              <Inspector initialView="waterfall" density={density} initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-list" label="Inspector · List only + Jump-to-latest pill" width={1360} height={720}>
+            <Frame theme={theme}>
+              <Inspector initialView="list" density={density} selectionMode={selMode} showJumpToLatest initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-dark" label="Inspector · Dark mode" width={1360} height={860}>
+            <Frame theme="dark">
+              <Inspector initialView="split" density={density} selectionMode={selMode} initialTheme="dark" />
+            </Frame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="states" title="States & overlays">
+          <DCArtboard id="ab-empty" label="Empty · Waiting for events" width={1360} height={720}>
+            <Frame theme={theme}>
+              <Inspector initialView="split" forceEmpty initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-reconnecting" label="Connection · Reconnecting" width={1360} height={720}>
+            <Frame theme={theme}>
+              <Inspector initialView="split" initialConn="reconnecting" initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-disconnected" label="Connection · Disconnected" width={1360} height={720}>
+            <Frame theme={theme}>
+              <Inspector initialView="split" initialConn="disconnected" initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-popover" label="Filter popover open" width={1360} height={720}>
+            <Frame theme={theme}>
+              <Inspector initialView="split" showFilterPopover initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-shortcuts" label="Shortcuts help overlay" width={1360} height={720}>
+            <Frame theme={theme}>
+              <Inspector initialView="split" showShortcuts initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+          <DCArtboard id="ab-toast" label="Toast · Copied as cURL" width={1360} height={720}>
+            <Frame theme={theme}>
+              <Inspector initialView="split" showToast="Copied as cURL" initialTheme={theme} />
+            </Frame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="body-viewer" title="Body viewer · states">
+          <DCArtboard id="ab-json" label="JSON tree" width={620} height={400}>
+            <div style={{height:'100%', background:'var(--bg-panel)', border:'1px solid var(--border-default)', borderRadius: 6, overflow:'hidden'}} className={theme==='dark'?'theme-dark':'theme-light'}>
+              <BodyViewer variant="json" data={window.ARGUS_DATA.BODY_JSON} />
+            </div>
+          </DCArtboard>
+          <DCArtboard id="ab-json-trunc" label="JSON · truncated" width={620} height={400}>
+            <div style={{height:'100%', background:'var(--bg-panel)', border:'1px solid var(--border-default)', borderRadius: 6, overflow:'hidden'}} className={theme==='dark'?'theme-dark':'theme-light'}>
+              <BodyViewer variant="json" truncated data={window.ARGUS_DATA.BODY_JSON} />
+            </div>
+          </DCArtboard>
+          <DCArtboard id="ab-text" label="Plain text" width={620} height={400}>
+            <div style={{height:'100%', background:'var(--bg-panel)', border:'1px solid var(--border-default)', borderRadius: 6, overflow:'hidden'}} className={theme==='dark'?'theme-dark':'theme-light'}>
+              <BodyViewer variant="text" text={"HTTP/1.1 200 OK\nServer: nginx/1.25\nContent-Type: application/json\n\n<body truncated in preview>\n\nThis is a word-wrapping plain-text body viewer. Toggle wrap in the toolbar."} />
+            </div>
+          </DCArtboard>
+          <DCArtboard id="ab-image" label="Image · preview" width={620} height={400}>
+            <div style={{height:'100%', background:'var(--bg-panel)', border:'1px solid var(--border-default)', borderRadius: 6, overflow:'hidden'}} className={theme==='dark'?'theme-dark':'theme-light'}>
+              <BodyViewer variant="image" imageMeta={{name:'hero.png', mime:'image/png', w:1024, h:576, size:'148 KB'}} />
+            </div>
+          </DCArtboard>
+          <DCArtboard id="ab-hex" label="Binary · hex + ASCII" width={620} height={400}>
+            <div style={{height:'100%', background:'var(--bg-panel)', border:'1px solid var(--border-default)', borderRadius: 6, overflow:'hidden'}} className={theme==='dark'?'theme-dark':'theme-light'}>
+              <BodyViewer variant="hex" />
+            </div>
+          </DCArtboard>
+          <DCArtboard id="ab-empty-body" label="Empty body" width={620} height={400}>
+            <div style={{height:'100%', background:'var(--bg-panel)', border:'1px solid var(--border-default)', borderRadius: 6, overflow:'hidden'}} className={theme==='dark'?'theme-dark':'theme-light'}>
+              <BodyViewer variant="empty" />
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="system" title="Design system at a glance">
+          <DCArtboard id="ab-system" label="Tokens · type · components" width={1360} height={900}>
+            <DesignSystemSheet theme={theme} />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      {tweaksOn && (
+        <div style={{position:'fixed', bottom: 20, right: 20, width: 240, padding: 14, background:'#fff', border:'1px solid #e4e7eb', borderRadius: 8, boxShadow:'0 12px 32px rgba(20,22,24,.12)', zIndex: 9999, font:'400 12px Inter'}}>
+          <div style={{font:'600 12px Inter', marginBottom: 10}}>Tweaks</div>
+          <div style={{marginBottom: 10}}>
+            <div style={{font:'500 11px Inter', color:'#434850', marginBottom:4}}>Theme</div>
+            <div style={{display:'flex', gap:4}}>
+              {['light','dark'].map(t => (
+                <button key={t} onClick={() => {setTheme(t); persist({defaultTheme:t});}} style={{flex:1, height:26, border:'1px solid #d4d8de', background: theme===t?'#eef4ff':'#fff', color:'#141618', borderRadius:4, cursor:'pointer', font:'500 11px Inter', textTransform:'capitalize'}}>{t}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{marginBottom: 10}}>
+            <div style={{font:'500 11px Inter', color:'#434850', marginBottom:4}}>Density</div>
+            <div style={{display:'flex', gap:4}}>
+              {['compact','comfy'].map(d => (
+                <button key={d} onClick={() => {setDensity(d); persist({density:d});}} style={{flex:1, height:26, border:'1px solid #d4d8de', background: density===d?'#eef4ff':'#fff', color:'#141618', borderRadius:4, cursor:'pointer', font:'500 11px Inter', textTransform:'capitalize'}}>{d}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{font:'500 11px Inter', color:'#434850', marginBottom:4}}>Selection style</div>
+            <div style={{display:'flex', gap:4}}>
+              {[['kb','keyboard'],['mouse','mouse']].map(([v,label]) => (
+                <button key={v} onClick={() => {setSelMode(v); persist({selectionMode:v});}} style={{flex:1, height:26, border:'1px solid #d4d8de', background: selMode===v?'#eef4ff':'#fff', color:'#141618', borderRadius:4, cursor:'pointer', font:'500 11px Inter', textTransform:'capitalize'}}>{label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Compact design system reference sheet
+function DesignSystemSheet({ theme }) {
+  return (
+    <div className={theme==='dark'?'theme-dark':'theme-light'} style={{height:'100%', background:'var(--bg-app)', overflow:'auto', padding: 20, color:'var(--fg-1)'}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap: 20}}>
+        {/* Colors */}
+        <Card title="Neutral surfaces">
+          <Swatches items={[
+            ['bg-app','var(--bg-app)'], ['bg-panel','var(--bg-panel)'],
+            ['bg-subtle','var(--bg-subtle)'], ['bg-sunken','var(--bg-sunken)'],
+            ['bg-selected','var(--bg-selected)'], ['bg-selected-kb','var(--bg-selected-kb)'],
+          ]}/>
+        </Card>
+        <Card title="Borders & accent">
+          <Swatches items={[
+            ['border-subtle','var(--border-subtle)'],['border-default','var(--border-default)'],['border-strong','var(--border-strong)'],
+            ['accent','var(--accent-bg)'],['accent-subtle','var(--accent-subtle)'],['focus ring','var(--border-focus)'],
+          ]}/>
+        </Card>
+
+        <Card title="Status · HTTP classes">
+          <div style={{display:'flex', gap: 6, flexWrap:'wrap'}}>
+            {['200','301','401','500','ERR'].map(s => {
+              const status = s === 'ERR' ? null : parseInt(s);
+              const t = statusTone(status, s==='ERR');
+              return <span key={s} style={{display:'inline-flex', alignItems:'center', gap:4, height: 20, padding:'0 8px', background:t.bg, color:t.fg, borderRadius:3, font:'500 11px "JetBrains Mono"'}}><span style={{width:5, height:5, borderRadius:999, background:t.dot}}/>{s}</span>;
+            })}
+          </div>
+        </Card>
+        <Card title="Log levels">
+          <div style={{display:'flex', gap: 6, flexWrap:'wrap'}}>
+            {['ERROR','WARN','INFO','DEBUG','VERB'].map(l => {
+              const t = logTone(l);
+              return <span key={l} style={{height:20, padding:'0 8px', background:t.bg, color:t.fg, borderRadius:3, font:'600 10px/20px "JetBrains Mono"', letterSpacing:'.06em'}}>{l}</span>;
+            })}
+          </div>
+        </Card>
+
+        <Card title="Source badges">
+          <div style={{display:'flex', gap: 8}}>
+            <SrcBadge kind="HTTP"/><SrcBadge kind="LOG"/><SrcBadge kind="CUSTOM"/>
+          </div>
+        </Card>
+        <Card title="Methods">
+          <div style={{display:'flex', gap: 10, flexWrap:'wrap'}}>
+            {['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map(m => (
+              <span key={m} style={{font:'700 12px/1 "JetBrains Mono"', color: methodColor(m)}}>{m}</span>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Type — UI (Inter)">
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            <span className="ds-h1">h1 · 18 / 26 semibold</span>
+            <span className="ds-h2">h2 · 15 / 22 semibold</span>
+            <span className="ds-h3">h3 · 13 / 20 semibold</span>
+            <span className="ds-p">Body · 12 / 18 regular — the default UI size.</span>
+            <span className="ds-label">eyebrow · 10px medium caps</span>
+            <span className="ds-meta">Meta · 11 / 16 regular · secondary</span>
+          </div>
+        </Card>
+        <Card title="Type — Mono (JetBrains Mono)">
+          <div style={{display:'flex', flexDirection:'column', gap:6, font:'400 12px/18px "JetBrains Mono"'}}>
+            <span>GET /v1/users/self · 200 · 124 ms</span>
+            <span style={{color:'var(--fg-2)'}}>Content-Type: application/json; charset=utf-8</span>
+            <span>14:22:07.412  ·  req_9f2c31aa</span>
+          </div>
+        </Card>
+
+        <Card title="Controls">
+          <div style={{display:'flex', gap:6, alignItems:'center', flexWrap:'wrap'}}>
+            <button style={{height:28, padding:'0 12px', border:0, background:'var(--accent-bg)', color:'var(--fg-on-accent)', font:'500 12px Inter', borderRadius:4, cursor:'pointer'}}>Primary</button>
+            <button style={{height:28, padding:'0 12px', border:'1px solid var(--border-default)', background:'var(--bg-panel)', color:'var(--fg-1)', font:'500 12px Inter', borderRadius:4, cursor:'pointer'}}>Secondary</button>
+            <button style={{height:28, padding:'0 12px', border:0, background:'transparent', color:'var(--fg-2)', font:'500 12px Inter', borderRadius:4, cursor:'pointer'}}>Ghost</button>
+            <button style={{height:28, padding:'0 12px', border:'1px solid var(--status-5xx-fg)', background:'transparent', color:'var(--status-5xx-fg)', font:'500 12px Inter', borderRadius:4, cursor:'pointer'}}>Danger</button>
+          </div>
+        </Card>
+        <Card title="Keyboard">
+          <div style={{display:'flex', flexWrap:'wrap', gap:6, alignItems:'center', font:'400 11px Inter', color:'var(--fg-2)'}}>
+            <Kbd>/</Kbd><Kbd>j</Kbd><Kbd>k</Kbd><Kbd>f</Kbd><Kbd>x</Kbd><Kbd>p</Kbd><Kbd>w</Kbd><Kbd>[</Kbd><Kbd>]</Kbd><Kbd>⎋</Kbd><Kbd>?</Kbd>
+            <span style={{marginLeft: 8, color:'var(--fg-3)'}}>All shortcut keycaps render inside <code style={{font:'500 11px "JetBrains Mono"'}}>&lt;kbd&gt;</code></span>
+          </div>
+        </Card>
+
+        <Card title="Spacing · 4px base">
+          <div style={{display:'flex', alignItems:'flex-end', gap: 6}}>
+            {[4,8,12,16,20,24,32,40,48,64].map(n => (
+              <div key={n} style={{display:'flex', flexDirection:'column', alignItems:'center', gap:4}}>
+                <div style={{width: n, height: n, background:'var(--accent-subtle)', border:'1px solid var(--accent-border)', borderRadius:2}}/>
+                <span style={{font:'400 10px "JetBrains Mono"', color:'var(--fg-3)'}}>{n}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card title="Row · 32 px">
+          <div style={{border:'1px solid var(--border-default)', borderRadius:4, overflow:'hidden'}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, height:32, padding:'0 12px', borderBottom:'1px solid var(--border-subtle)', font:'400 12px "JetBrains Mono"'}}>
+              <SrcBadge kind="HTTP"/>
+              <span style={{font:'700 11px "JetBrains Mono"', color:'var(--method-get-fg)'}}>GET</span>
+              <span style={{display:'inline-flex', alignItems:'center', gap:4, height:18, padding:'0 6px', borderRadius:3, background:'var(--status-2xx-bg)', color:'var(--status-2xx-fg)', font:'500 11px/1 "JetBrains Mono"'}}><span style={{width:5, height:5, borderRadius:999, background:'var(--status-2xx-dot)'}}/>200</span>
+              <span style={{flex:1, color:'var(--fg-1)'}}><span style={{color:'var(--fg-3)'}}>api.example.com</span>/v1/users/self</span>
+              <span style={{color:'var(--fg-2)'}}>124 ms</span>
+            </div>
+            <div style={{display:'flex', alignItems:'center', gap:10, height:32, padding:'0 12px', background:'var(--bg-selected-kb)', boxShadow:'inset 2px 0 0 var(--border-focus)', font:'400 12px "JetBrains Mono"'}}>
+              <SrcBadge kind="LOG"/>
+              <span style={{font:'600 10px "JetBrains Mono"', padding:'3px 6px', background:'var(--log-error-bg)', color:'var(--log-error-fg)', borderRadius:3}}>ERROR</span>
+              <span style={{width:54, color:'var(--fg-3)'}}>—</span>
+              <span style={{flex:1}}><span style={{color:'var(--fg-3)'}}>[orders]</span> NullPointerException at OrderRepo.save:42</span>
+              <span style={{color:'var(--fg-2)'}}>—</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+function Card({ title, children }) {
+  return (
+    <div style={{background:'var(--bg-panel)', border:'1px solid var(--border-default)', borderRadius: 6, padding: 14}}>
+      <div style={{font:'500 10px/1 Inter', letterSpacing:'.04em', textTransform:'uppercase', color:'var(--fg-3)', marginBottom: 10}}>{title}</div>
+      {children}
+    </div>
+  );
+}
+function Swatches({ items }) {
+  return (
+    <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap: 6}}>
+      {items.map(([name, val]) => (
+        <div key={name} style={{display:'flex', flexDirection:'column', gap:4}}>
+          <div style={{height: 32, background: val, border:'1px solid var(--border-subtle)', borderRadius: 4}}/>
+          <span style={{font:'400 10px/1.3 "JetBrains Mono"', color:'var(--fg-2)'}}>{name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

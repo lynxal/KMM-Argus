@@ -1,0 +1,187 @@
+# Agent OS Standards Index
+
+analytics:
+  analytics-architecture:
+    description: Singleton Analytics object with pluggable delegates (Amplitude, Firebase), Mutex-guarded thread-safe dispatch
+  event-instrumentation:
+    description: Event naming (snake_case verbs), tracking via repositories/use cases/screen models, ScreenTrackingEffect, AnalyticsAction.Exited
+
+architecture:
+  delegate-composition:
+    description: Multi-step operation decomposition via delegates, BLE mesh state retrieval use case pattern
+  di-threading-model:
+    description: Named CoroutineScope per DataSourceType (BLE/Network/SQL), single-threaded vs parallel, SupervisorJob lifecycle
+  error-handling:
+    description: Sealed error hierarchies extending Throwable, HttpResponseState domain mapping, recoverCatching factory pattern
+  multi-source-composition:
+    description: BLE mesh + cloud API state merging, CanvasNetworkInteractionDelegate channel routing, repository orchestration
+  repository-pattern:
+    description: RepositoryInterface + impl split, reset() method, Flow reactive state, multi-source composition rules
+  screenmodel-state:
+    description: Single unified StateFlow per ScreenModel, onStart lazy loading, WhileSubscribed(5000) sharing strategy
+  use-case-convention:
+    description: Suspend execute() returning Result<T>, one-shot operations, Koin factory/single registration
+
+bluetooth-mesh:
+  bytearray-classes:
+    description: ByteArray in data classes requires contentEquals/contentHashCode overrides or regular class wrapper
+  bytewalker-deserialization:
+    description: Cursor-based parser for variable/optional fields, DeserializableState companion pattern with numBytes/fromBytes
+  connection-lifecycle:
+    description: BleDeviceState sealed class, MTU negotiation (MaxMTU=517, SafeMTU=23), service discovery (provisioning UUID 00001827)
+  control-throttling:
+    description: MeshControlThrottler rate-limits continuous slider messages, fire-and-forget intermediate, guaranteed final delivery
+  crypto-conventions:
+    description: expect/actual platform crypto, AbstractCryptoUtils shared derivation (K1-K4, salt, AID), CryptoKeys closed enum
+  gatt-sar-assembly:
+    description: SAR types (None/Start/Continuation/End) in top 2 bits, inbound state machine, outbound SegmentedMessage splitting
+  message-hierarchy:
+    description: MeshMessage -> AccessMessage -> ApplicationMessage -> VendorMessage, CanvasOpcode company ID 0x02FF
+  scanner-management:
+    description: Dual scanners (balanced/low-latency), activation flags, node identity + network identity resolution, proxy selection via RSSI
+  vendor-model-communication:
+    description: CanvasActionType enum (0xE0-0xE3 integration-only), CanvasControlPublishUseCase, value ranges (lightness 0-1000, CCT 1000-15000)
+
+cloud:
+  http-client-wrapper:
+    description: HttpClientWrapper with executeSafe{Method}, multi-level error parsing (HttpErrorResponse -> HttpValidationErrorResponse)
+  http-error-handling:
+    description: HttpErrorResponse + HttpValidationErrorResponse both extend RuntimeException, fromThrowable domain mapping
+  http-error-models:
+    description: Two-tier error system, HttpResponseState sealed hierarchy (ServerError/ClientError/Unauthorized), 401 special handling
+  request-response-modeling:
+    description: Kotlinx.serialization with @SerialName, data class request/response, integer-based state encoding, form-encoded login
+  service-conventions:
+    description: Interface + Impl split, URL constants in companion, always include Accept header, HttpRoutes base constants
+  service-layer:
+    description: REST services via HttpClientWrapper, Result<T> return, AuthorizedHttpClient vs UnauthorizedHttpClient, single registration
+  signalr-socket:
+    description: ASP.NET SignalR real-time updates, auto-reconnect exponential backoff, one function per event handler, collectLatest vs collect
+  state-synchronization:
+    description: Auto/Remote/Local control modes, RemoteStateService state fetching, TransactionIdRepository per mutation, Duration conversion
+
+coroutines:
+  async-error-handling:
+    description: TimeoutCancellationException to Result.failure, Mutex.withLock for BLE operations, linear backoff retry (500ms increments)
+  flow-composition:
+    description: combine() + collectLatest() for multi-source, Pair/Triple/data class aggregation, 5000ms WhileSubscribed timeout
+  flow-utilities:
+    description: runCatchingCancellable preserves CancellationException, bufferedFlow batches emissions into duration windows
+  job-lifecycle:
+    description: Always cancel() before restarting jobs, polling loops vs flow observation, AcknowledgedMessage pattern for mesh acks
+  suspend-vs-flow:
+    description: suspend fun for one-shot operations, Flow for reactive state, custom CoroutineScope injection for long-running BLE ops
+
+domain-modeling:
+  conversion-patterns:
+    description: Converter/BidirectionalConverter classes, companion from() factories, extension to*() for view objects
+  sealed-hierarchies:
+    description: sealed interface vs sealed class (shared state), operation results with nested Error extending Throwable, data object singletons
+  state-composition:
+    description: Structure + State separation, CompositeNodeState wrapper, state.intersect() timestamp precedence merging
+
+kmp:
+  build-variants:
+    description: Three flavors (development/staging/production) via buildkonfig, environment source sets with AppInit, debug/production keys
+  expect-actual-conventions:
+    description: expect/actual file naming, source-set layout, which form (class/fun/object/val/interface) to use
+  ios-cinterop:
+    description: .def file per architecture (iosArm64/iosSimulatorArm64), SwiftCryptoBackend cinterop bindings, expect/actual object pattern
+  module-boundaries:
+    description: Module hierarchy and one-way dependency rules across KMP modules, platform adapter isolation
+  module-build-conventions:
+    description: Plugin assignment per module, version catalog, iOS static framework config, SDK versions, JVM 17 toolchain
+  version-management:
+    description: Version format ({major}.{minor}.{buildId} via currentTimeMillis), BuildKonfig flavors, versionCode formula, Firebase App Distribution
+
+naming:
+  class-suffixes:
+    description: Storage (local state owner), Repository (orchestrator), Service (HTTP/WebSocket), UseCase (execute), Delegate, Handler
+  code-documentation:
+    description: KDoc for public API, inline comments for business logic, document why not what, @see references, no stale comments
+  entity-dto-naming:
+    description: Domain entities plain name (no Data suffix), Remote/Mesh/Composite prefixes for state, Request/Response DTOs, sealed hierarchies
+  function-variable-naming:
+    description: UseCase.execute(), Repository get/set/save/delete, Handler perform/process, underscore backing fields, UPPER_SNAKE_CASE constants
+  package-structure:
+    description: Package layout (data/domain/remote/ui/di), singular folder names, one top-level declaration per file
+
+persistence:
+  converter-conventions:
+    description: Stateless companion object converters vs context-aware instances, enum serialization via fromId(), null fallbacks required
+  in-memory-state-storage:
+    description: Time-sensitive frequent state (lights, connectivity, zones), Mutex.withLock all reads/writes, singleton registration
+  reactive-storage-flows:
+    description: StateFlow replay=1, update flow replay=0, extraBufferCapacity based on frequency, tryEmit after every write
+  sqldelight-conventions:
+    description: DAO suffix entities, snake_case columns, TEXT AS complex types, transaction wrappers, platform expect/actual drivers
+
+platform:
+  build-variants:
+    description: Three environments (dev/staging/prod) via appBuildFlavor, conditional dependencies, source set structure per environment
+  init-and-di:
+    description: Android Application.onCreate auto-init, iOS Swift manual with pre/post hooks, three-layer DI, AppModuleFactory bridge pattern
+  permission-flow:
+    description: kmm-permissions library, PermissionState (UNKNOWN/UNDETERMINED/GRANTED/DENIED/DENIED_ALWAYS), screen request, repository check only
+  permission-platform-config:
+    description: Android manifest (BLUETOOTH_SCAN/CONNECT/ADVERTISE API 31+), iOS Info.plist (NSBluetoothAlwaysUsageDescription), UIBackgroundModes
+  permission-ui-components:
+    description: PermissionsDialog for request, BluetoothPermissionsDenied for DENIED_ALWAYS, platform-suffixed resource strings
+  platform-abstractions:
+    description: BLE (Kable Android/iOS), HTTP engines (OkHttp/Darwin), SQLite pragmas, device ID (Settings.Secure vs Keychain), location
+
+provisioning:
+  configuration-binding:
+    description: Post-BLE config 9 steps, space hierarchy (Home/Area/Space/Sub-space), bottom-up binding order, pub/sub per model role
+  provisioning-flow:
+    description: 8 mesh steps (Invite->Capabilities->Start->PublicKey->Confirmation->Random->Data->Complete), 60s global + 10s per-step timeouts
+  topology-optimization:
+    description: Proxy enablement thresholds (RSSI -70dBm, 2-4 proxies), relay + friend capability logic, reachability filter for phantom nodes
+
+security:
+  auth-flow:
+    description: AuthorizedHttpClient vs UnauthorizedHttpClient, Ktor Auth bearer token refresh, conditional 5xx+timeout retries
+  login-session:
+    description: LoginState sealed hierarchy with error subtypes, form-encoded login/refresh, ClearStoredDataUseCase multi-stage logout
+  token-lifecycle:
+    description: KVault encrypted storage, TokenStorage + TokenRepository, "invalid" string invalidation (not delete), tri-state StateFlow
+
+testing:
+  mocking-conventions:
+    description: Mokkery mock creation, every/everySuspend stubbing, verify assertions, runTest for coroutines
+  test-data-factories:
+    description: createDummy/createTest factory functions with defaults, module-specific vs shared factories, spec test vectors
+  test-structure:
+    description: Kotlin.test framework, commonTest default, backtick test names, AAA structure, @BeforeTest setup
+
+ui-navigation:
+  component-library:
+    description: V2 (ui_components_v2) for new code, V1 (ui_components) legacy, primitives/components/view/entity structure
+  compose-theme-architecture:
+    description: Four theme types (DEFAULT/LIGHT/DARK/MIDNIGHT), ExtendedColorScheme + Material3, CompositionLocal (LocalColors/LocalThemeState)
+  custom-modifier-patterns:
+    description: DrawModifierNode + ModifierNodeElement pattern, @Composable @Stable for theme access, dropShadow/innerShadow/combinedShadow
+  n3-navigation-architecture:
+    description: Navigation3 migration from Voyager, @Serializable routes, DebouncedNavigation 200ms debounce, nested NavBackStack support
+  n3-vs-voyager-screens:
+    description: N3 plain @Composable fun, Voyager class : Screen (legacy), N3 uses remember { getKoin().get<Model>() } for DI
+  navigation-routing:
+    description: Sealed @Serializable AppRoute routes, DebouncedNavigation mandatory, slide transitions, migrate JSON route params
+  resources:
+    description: Moko-resources in ui_components_v2, snake_case with label_/title_/desc_ prefixes, platform-suffixed strings (_android/_ios)
+  screen-composition:
+    description: Three-tier Screen -> ScreenModel -> View, navigation handled in Screen, DI via remember+getKoin, collectAsStateWithLifecycle
+  ui-state-action:
+    description: ViewUiState sealed immutable classes, ViewUiAction sealed for user interactions, View Objects (VO) in entity/vo/, navigation flows to Screen
+
+validation:
+  entity-validation:
+    description: BLE domain entity fail-fast init validation, IntValidator/StringValidator with ranges/regex/list types, IllegalArgumentException throws
+  logging-conventions:
+    description: MeshLogger for lynxmesh (Data/Domain/UseCase/Transport/Crypto identifiers), Logger.tag() for app level, Clock for duration tracking
+  no-internal-apis:
+    description: No kotlin.internal/kotlinx.coroutines.internal/androidx.compose.runtime.internal usage, public API only, version stability guarantee
+
+workflow:
+  commit-conventions:
+    description: feat/fix/refactor/chore/docs/test/style/perf/ci/build types, imperative 72-char subject, no agent attribution trailers
