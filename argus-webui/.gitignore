@@ -1,0 +1,7 @@
+node_modules/
+dist/
+lighthouse.json
+*.log
+.vite/
+.DS_Store
+src/design/tokens.json

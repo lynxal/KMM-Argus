@@ -1,0 +1,15 @@
+export const styles = {
+  bar: 'h-9 flex items-center gap-3 px-2 bg-bg-panel border-b border-border-default overflow-x-auto',
+  group: 'flex items-center gap-1',
+  label: 'text-fg-3 text-xs font-medium font-ui uppercase tracking-wider mr-1',
+  chip: 'flex items-center justify-center px-2 h-6 rounded-sm border border-transparent bg-bg-subtle text-fg-2 text-xs font-ui font-medium cursor-pointer transition-colors duration-base',
+  chipActive: 'border-border-default text-fg-1',
+  chipInactive: 'opacity-60',
+  statusChip: 'flex items-center gap-1 px-2 h-6 rounded-sm border border-transparent bg-bg-subtle text-fg-2 text-xs font-mono cursor-pointer transition-colors duration-base',
+  statusDot: 'ds-conn-dot',
+  input: 'h-6 w-28 px-2 rounded-sm bg-bg-subtle text-fg-1 placeholder:text-fg-3 font-mono text-xs outline-none border border-border-default focus:border-border-focus',
+  spacer: 'flex-1',
+  count: 'text-fg-2 text-xs font-mono whitespace-nowrap',
+  clearLink: 'text-fg-link text-xs font-ui cursor-pointer hover:underline',
+  divider: 'w-px h-5 bg-border-default',
+} as const;
