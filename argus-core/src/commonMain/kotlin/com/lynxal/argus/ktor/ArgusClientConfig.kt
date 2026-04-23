@@ -1,0 +1,25 @@
+package com.lynxal.argus.ktor
+
+import com.lynxal.argus.model.ArgusEventBus
+import com.lynxal.argus.model.NoopEventBus
+
+public class ArgusClientConfig {
+    public var eventBus: ArgusEventBus = NoopEventBus
+    public var maxBodyBytes: Long = DEFAULT_MAX_BODY_BYTES
+    public var redactHeaders: Set<String> = DEFAULT_REDACT_HEADERS
+    public var captureRequestBody: Boolean = true
+    public var captureResponseBody: Boolean = true
+
+    public companion object {
+        public const val DEFAULT_MAX_BODY_BYTES: Long = 1_000_000L
+
+        public val DEFAULT_REDACT_HEADERS: Set<String> = setOf(
+            "Authorization",
+            "Cookie",
+            "Set-Cookie",
+            "Proxy-Authorization",
+        )
+
+        public const val REDACTED_PLACEHOLDER: String = "***redacted***"
+    }
+}
