@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "argus"
 include(":argus-core")
+include(":sample-android")
