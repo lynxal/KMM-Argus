@@ -10,10 +10,12 @@ import { createLogoMark } from '../Primitives/Primitives';
 export function createWaitingForEvents({ source }: { source: EventSource }): HTMLElement {
   const el = document.createElement('div');
   el.className =
-    'h-full flex flex-col items-center justify-center gap-3 text-fg-3 font-ui text-xs';
+    'self-stretch flex-1 min-h-0 flex flex-col items-center justify-center gap-3 text-fg-3 font-ui text-xs';
 
   const icon = createLogoMark(40);
   icon.classList.add('text-fg-muted', 'flex-none', 'block');
+  icon.style.width = '40px';
+  icon.style.height = '40px';
 
   const title = document.createElement('div');
   title.className = 'text-fg-1 text-base font-semibold';
