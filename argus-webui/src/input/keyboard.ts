@@ -47,7 +47,7 @@ export const BINDINGS: readonly KeyBinding[] = [
   { key: 'w', action: 'cycleView', label: 'w', group: 'Views', description: 'Cycle List → Split → Waterfall' },
   { key: '[', action: 'prevTab', label: '[', group: 'Views', description: 'Previous detail tab' },
   { key: ']', action: 'nextTab', label: ']', group: 'Views', description: 'Next detail tab' },
-  { key: '?', action: 'openShortcuts', label: '?', group: 'Help', description: 'Open shortcuts modal' },
+  { key: '?', shift: true, action: 'openShortcuts', label: '?', group: 'Help', description: 'Open shortcuts modal' },
   { key: 'c', meta: true, action: 'copySelection', label: '⌘ C', group: 'Capture', description: 'Copy selected event (cURL / JSON)' },
   { key: 'z', meta: true, action: 'undo', label: '⌘ Z', group: 'Capture', description: 'Undo last destructive action' },
 ];
