@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 @Composable
 fun App(
     httpClient: HttpClient,
-    eventLog: StateFlow<List<String>>,
+    argusUrl: StateFlow<String?>,
 ) {
     MaterialTheme {
-        SampleScreen(httpClient = httpClient, eventLog = eventLog)
+        SampleScreen(httpClient = httpClient, argusUrl = argusUrl)
     }
 }

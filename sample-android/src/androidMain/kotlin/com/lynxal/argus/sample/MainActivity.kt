@@ -12,7 +12,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 httpClient = app.httpClient,
-                eventLog = app.debugTools.observeEventLog(),
+                argusUrl = app.debugTools.observeArgusUrl(),
             )
         }
     }

@@ -6,5 +6,5 @@ import kotlinx.coroutines.flow.StateFlow
 interface DebugTools {
     fun buildHttpClient(): HttpClient
     fun installLogging()
-    fun observeEventLog(): StateFlow<List<String>>
+    fun observeArgusUrl(): StateFlow<String?>
 }

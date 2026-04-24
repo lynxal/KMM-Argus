@@ -11,6 +11,7 @@ androidxLifecycle = "2.9.1"
 android-compileSdk = "36"
 android-minSdk = "24"
 android-targetSdk = "36"
+robolectric = "4.12.2"
 
 [libraries]
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
@@ -32,6 +33,7 @@ ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", v
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivityCompose" }
 androidx-lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "androidxLifecycle" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 [plugins]
 androidLibrary = { id = "com.android.library", version.ref = "agp" }

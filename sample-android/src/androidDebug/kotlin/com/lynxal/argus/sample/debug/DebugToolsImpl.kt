@@ -1,9 +1,9 @@
 package com.lynxal.argus.sample.debug
 
 import android.app.Application
-import com.lynxal.argus.ktor.Argus
+import com.lynxal.argus.android.Argus
+import com.lynxal.argus.android.ArgusHandle
 import com.lynxal.argus.logging.ArgusLoggerDelegate
-import com.lynxal.argus.model.ArgusEventBus
 import com.lynxal.logging.DebugLoggerImplementation
 import com.lynxal.logging.LogLevel
 import com.lynxal.logging.Logger
@@ -12,16 +12,16 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.StateFlow
+import com.lynxal.argus.ktor.Argus as ArgusPlugin
 
-// Temporary wiring: plugin + delegate point at ConsoleEventBus for now.
-// Replaced by ArgusServer's ChannelEventBus when :argus-android lands.
-class DebugToolsImpl(@Suppress("unused") private val app: Application) : DebugTools {
-    private val buffer = EventLogBuffer()
-    private val bus: ArgusEventBus = ConsoleEventBus(tag = "Argus", sink = buffer)
+class DebugToolsImpl(private val app: Application) : DebugTools {
+    private val argus: ArgusHandle = Argus.start(app) {
+        maxBodyBytes = 262_144L
+    }
 
     override fun buildHttpClient(): HttpClient = HttpClient(CIO) {
-        install(Argus) {
-            eventBus = bus
+        install(ArgusPlugin) {
+            eventBus = argus.eventBus
             maxBodyBytes = 262_144L
         }
         install(ContentNegotiation) {
@@ -32,8 +32,8 @@ class DebugToolsImpl(@Suppress("unused") private val app: Application) : DebugTo
     override fun installLogging() {
         Logger.minLevel = LogLevel.Verbose
         Logger.add(DebugLoggerImplementation())
-        Logger.add(ArgusLoggerDelegate(bus))
+        Logger.add(ArgusLoggerDelegate(argus.eventBus))
     }
 
-    override fun observeEventLog(): StateFlow<List<String>> = buffer.events
+    override fun observeArgusUrl(): StateFlow<String?> = argus.url
 }

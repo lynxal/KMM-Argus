@@ -81,5 +81,5 @@ android {
 
 dependencies {
     debugImplementation(compose.uiTooling)
-    debugImplementation(project(":argus-core"))
+    debugImplementation(projects.argusAndroid)
 }

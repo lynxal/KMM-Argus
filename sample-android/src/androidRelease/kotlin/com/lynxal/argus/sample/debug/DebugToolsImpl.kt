@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class DebugToolsImpl(@Suppress("unused") private val app: Application) : DebugTools {
-    private val empty: StateFlow<List<String>> = MutableStateFlow(emptyList<String>()).asStateFlow()
+    private val empty: StateFlow<String?> = MutableStateFlow<String?>(null).asStateFlow()
 
     override fun buildHttpClient(): HttpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
@@ -26,5 +26,5 @@ class DebugToolsImpl(@Suppress("unused") private val app: Application) : DebugTo
         Logger.add(DebugLoggerImplementation())
     }
 
-    override fun observeEventLog(): StateFlow<List<String>> = empty
+    override fun observeArgusUrl(): StateFlow<String?> = empty
 }
