@@ -17,4 +17,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "argus"
 include(":argus-core")
+include(":argus-webui")
+include(":argus-webui-bundle")
 include(":sample-android")
