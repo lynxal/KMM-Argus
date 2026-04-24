@@ -3,8 +3,9 @@ import {
   ARGUS_SCHEMA_VERSION,
   type ArgusEvent,
   type DeviceInfo,
+  type EventFrame,
   type HelloFrame,
-  type PingFrame,
+  type ServerAppInfo,
   type StreamFrame,
 } from './schema';
 import type { ConnectionState, EventListener, EventSource } from './eventSource';
@@ -21,22 +22,22 @@ export interface WebsocketSourceOptions {
 
 /**
  * Real transport. On `connect()`:
- *   1. GET /argus/api/device → populate `device` signal.
- *   2. GET /argus/api/events?limit=500 → backfill (newest-first per spec).
- *   3. Open WS /argus/api/stream → first frame must be `Hello` with matching
- *      schemaVersion; subsequent frames are `ArgusEvent` or `Ping`.
+ *   1. GET /api/info → populate `device` signal (mapped from ServerAppInfo).
+ *   2. GET /api/events?limit=500 → backfill (oldest-first as stored).
+ *   3. Open WS /ws → first frame must be `hello` with matching schemaVersion;
+ *      subsequent frames are `event` envelopes or `cleared`.
  *
- * Heartbeat (from handoff README): gap > 3s flips to `reconnecting`; gap > 15s
- * flips to `disconnected`. Reconnect backs off exponentially capped at 10s.
- *
- * Not yet exercised end-to-end — `:argus-server-core` lands next prompt.
+ * Connection state is driven by ws.onopen / ws.onclose; no idle timeout since
+ * the server sends no keepalive Ping frames (Ktor's WebSocket protocol-level
+ * ping/pong keeps the TCP connection alive without surfacing a JS event).
+ * Reconnect backs off exponentially capped at 10s.
  */
 export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource {
   const { device: host } = opts;
   const scheme = opts.scheme ?? (window.location.protocol === 'https:' ? 'https' : 'http');
   const wsScheme = scheme === 'https' ? 'wss' : 'ws';
-  const base = `${scheme}://${host}/argus/api`;
-  const wsUrl = `${wsScheme}://${host}/argus/api/stream`;
+  const base = `${scheme}://${host}`;
+  const wsUrl = `${wsScheme}://${host}/ws`;
 
   const connection = signal<ConnectionState>('disconnected');
   const device = signal<DeviceInfo | null>(null);
@@ -45,8 +46,8 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
   const listeners = new Set<EventListener>();
 
   let ws: WebSocket | null = null;
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let reconnectDelay = 500;
+  let shutdown = false;
 
   function markSeen(): void {
     lastSeenAt.value = Date.now();
@@ -57,39 +58,28 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
     }
   }
 
-  function startHeartbeat(): void {
-    if (heartbeatTimer) clearInterval(heartbeatTimer);
-    heartbeatTimer = setInterval(() => {
-      const last = lastSeenAt.value;
-      if (last == null) return;
-      const gap = Date.now() - last;
-      if (gap > 15_000) connection.value = 'disconnected';
-      else if (gap > 3_000 && connection.value === 'connected') {
-        connection.value = 'reconnecting';
-        retryAt.value = Date.now() + reconnectDelay;
-      }
-    }, 1_000);
-  }
-
-  function stopHeartbeat(): void {
-    if (heartbeatTimer) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-  }
-
   function emitEvent(event: ArgusEvent): void {
     for (const listener of listeners) listener(event);
   }
 
+  function mapAppInfo(info: ServerAppInfo): DeviceInfo {
+    return {
+      name: info.device || info.pkg,
+      address: host,
+      platform: 'android',
+      version: info.versionName,
+    };
+  }
+
   async function fetchDevice(): Promise<void> {
-    const res = await fetch(`${base}/device`);
-    if (!res.ok) throw new Error(`device fetch failed: ${res.status}`);
-    device.value = (await res.json()) as DeviceInfo;
+    const res = await fetch(`${base}/api/info`);
+    if (!res.ok) throw new Error(`info fetch failed: ${res.status}`);
+    const info = (await res.json()) as ServerAppInfo;
+    device.value = mapAppInfo(info);
   }
 
   async function backfill(): Promise<void> {
-    const res = await fetch(`${base}/events?limit=500`);
+    const res = await fetch(`${base}/api/events?limit=500`);
     if (!res.ok) return;
     const events = (await res.json()) as ArgusEvent[];
     for (const e of events) emitEvent(e);
@@ -97,20 +87,27 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
 
   function handleFrame(frame: StreamFrame): void {
     markSeen();
-    if (frame.type === 'Hello') {
+    if (frame.type === 'hello') {
       const hello = frame as HelloFrame;
       if (hello.schemaVersion !== ARGUS_SCHEMA_VERSION) {
         console.error(
           `Argus schema mismatch: UI=${ARGUS_SCHEMA_VERSION}, server=${hello.schemaVersion}. Disconnecting.`,
         );
         disconnect();
+      } else {
+        device.value = mapAppInfo(hello.info);
       }
       return;
     }
-    if (frame.type === 'Ping') {
-      void (frame as PingFrame);
+    if (frame.type === 'event') {
+      emitEvent((frame as EventFrame).event);
       return;
     }
+    if (frame.type === 'cleared') {
+      // UI store owns clear semantics locally; nothing to do here besides the lastSeen update above.
+      return;
+    }
+    // Back-compat: if a future server ever sends flat events, handle them too.
     emitEvent(frame);
   }
 
@@ -126,7 +123,7 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
     };
     ws.onclose = () => {
       ws = null;
-      if (connection.value !== 'disconnected') scheduleReconnect();
+      if (!shutdown) scheduleReconnect();
     };
     ws.onerror = () => {
       // onclose will fire next; let it handle retry.
@@ -137,13 +134,14 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
     connection.value = 'reconnecting';
     retryAt.value = Date.now() + reconnectDelay;
     setTimeout(() => {
-      if (connection.value === 'disconnected') return;
+      if (shutdown) return;
       openStream();
       reconnectDelay = Math.min(reconnectDelay * 2, 10_000);
     }, reconnectDelay);
   }
 
   async function connect(): Promise<void> {
+    shutdown = false;
     try {
       await fetchDevice();
       await backfill();
@@ -151,11 +149,10 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
       console.error('argus device handshake failed', err);
     }
     openStream();
-    startHeartbeat();
   }
 
   function disconnect(): void {
-    stopHeartbeat();
+    shutdown = true;
     if (ws) {
       ws.onclose = null;
       ws.close();
@@ -168,7 +165,7 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
 
   async function clear(): Promise<void> {
     try {
-      await fetch(`${base}/clear`, { method: 'POST' });
+      await fetch(`${base}/api/events`, { method: 'DELETE' });
     } catch (err) {
       console.error('argus clear failed', err);
     }

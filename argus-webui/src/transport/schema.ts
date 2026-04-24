@@ -96,21 +96,36 @@ export const isHttpEvent = (e: ArgusEvent): e is HttpEvent => e.type === 'HttpEv
 export const isLogEvent = (e: ArgusEvent): e is LogEvent => e.type === 'LogEvent';
 export const isCustomEvent = (e: ArgusEvent): e is CustomEvent => e.type === 'CustomEvent';
 
-/** First WebSocket frame — mirrors HelloPayload in argus-core/model/Schema.kt. */
+/**
+ * Server-sent AppInfo (mirrored from argus-core/model/AppInfo.kt). Nested inside
+ * HelloFrame and also returned by GET /api/info.
+ */
+export interface ServerAppInfo {
+  pkg: string;
+  versionName: string;
+  device: string;
+  argusVersion: string;
+}
+
+/** First WebSocket frame. Server uses lowercase discriminator and nests AppInfo. */
 export interface HelloFrame {
-  type: 'Hello';
+  type: 'hello';
+  info: ServerAppInfo;
   schemaVersion: number;
-  serverName: string;
-  serverVersion?: string | null;
 }
 
-/** Keepalive frame. UI tracks arrival time for reconnecting/disconnected state. */
-export interface PingFrame {
-  type: 'Ping';
-  timestamp: number;
+/** Event envelope: inner event carries the capital-T HttpEvent/LogEvent/CustomEvent discriminator. */
+export interface EventFrame {
+  type: 'event';
+  event: ArgusEvent;
 }
 
-export type StreamFrame = HelloFrame | PingFrame | ArgusEvent;
+/** Server notification that the ring buffer was cleared via DELETE /api/events. */
+export interface ClearedFrame {
+  type: 'cleared';
+}
+
+export type StreamFrame = HelloFrame | EventFrame | ClearedFrame | ArgusEvent;
 
 export interface DeviceInfo {
   name: string;

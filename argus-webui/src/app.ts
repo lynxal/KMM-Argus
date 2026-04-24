@@ -13,14 +13,24 @@ import { createWaitingForEvents } from './components/EmptyStates/WaitingForEvent
 import { effect } from '@preact/signals-core';
 
 /**
- * App shell. Resolves the event source from `?device=` / `?simulate=`,
- * builds the store, binds them, and mounts the shell. Remaining tasks
- * flesh out FilterBar, EventList, EventDetail, Waterfall, and Overlays.
+ * App shell. Resolves the event source from `?device=` / `?simulate=` / the
+ * current page origin (when the webui is served by the Argus server itself),
+ * builds the store, binds them, and mounts the shell.
  */
 export function mountApp(root: HTMLElement): void {
   const params = new URLSearchParams(window.location.search);
-  const device = params.get('device');
+  const deviceParam = params.get('device');
   const simulate = params.get('simulate');
+  // Default to the current origin when the page is itself served by an Argus server
+  // (e.g. http://<ip>:<port>/ served via argus-server-core's UI route). Falls back
+  // to mock only when the page isn't served over http(s) or ?simulate= is explicit.
+  const sameOrigin =
+    simulate == null &&
+    (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+    window.location.host.length > 0
+      ? window.location.host
+      : null;
+  const device = deviceParam ?? sameOrigin;
 
   const store = createEventStore();
   const source: EventSource = device
