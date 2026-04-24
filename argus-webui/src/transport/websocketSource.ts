@@ -68,6 +68,7 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
       address: host,
       platform: 'android',
       version: info.versionName,
+      pkg: info.pkg,
     };
   }
 

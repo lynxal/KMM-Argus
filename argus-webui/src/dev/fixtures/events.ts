@@ -198,5 +198,6 @@ export const FIXTURE_DEVICE = {
   name: 'Pixel 8',
   address: '192.168.1.42:9090',
   platform: 'android' as const,
-  version: 'Argus/1.0',
+  version: '1.4.2',
+  pkg: 'com.example.app',
 };

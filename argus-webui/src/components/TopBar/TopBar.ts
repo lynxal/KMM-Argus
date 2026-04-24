@@ -2,7 +2,7 @@ import { effect } from '@preact/signals-core';
 import type { EventStore, View } from '../../store/eventStore';
 import type { EventSource } from '../../transport/eventSource';
 import type { ShortcutBus } from '../../input/keyboard';
-import { createConnDot, createIconEl } from '../Primitives/Primitives';
+import { createConnDot, createIconEl, createLogoMark } from '../Primitives/Primitives';
 import { styles } from './TopBar.styles';
 import { CONN_TONE, VIEW_LABELS } from './TopBar.states';
 
@@ -26,14 +26,15 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
   // Brand
   const brand = document.createElement('div');
   brand.className = styles.brand;
-  const logo = createIconEl('zap', 20, 1.5, 'text-accent-fg');
+  const logo = createLogoMark(20);
+  logo.classList.add('text-fg-1', 'flex-none', 'block');
   const wordmark = document.createElement('span');
   wordmark.className = styles.wordmark;
   wordmark.textContent = 'Argus';
-  const version = document.createElement('span');
-  version.className = styles.versionChip;
-  version.textContent = '1.0';
-  brand.append(logo, wordmark, version);
+  const appBadge = document.createElement('span');
+  appBadge.className = styles.appBadge;
+  appBadge.textContent = '—';
+  brand.append(logo, wordmark, appBadge);
 
   // Connection pill
   const connPill = document.createElement('div');
@@ -146,6 +147,19 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
       search.focus();
       search.select();
     }
+  });
+
+  // App identity badge — "<pkg> · <versionName> · <device>" from the server's AppInfo.
+  effect(() => {
+    const d = source.device.value;
+    if (!d) {
+      appBadge.textContent = '—';
+      appBadge.title = 'Waiting for device info…';
+      return;
+    }
+    const parts = [d.pkg, d.version, d.name].filter((s) => s && s.length > 0);
+    appBadge.textContent = parts.join(' · ');
+    appBadge.title = `${d.pkg} ${d.version} on ${d.name} (${d.address})`;
   });
 
   return bar;

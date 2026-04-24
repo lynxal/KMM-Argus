@@ -16,6 +16,7 @@ import com.lynxal.argus.ktor.Argus as ArgusPlugin
 
 class DebugToolsImpl(private val app: Application) : DebugTools {
     private val argus: ArgusHandle = Argus.start(app) {
+        port = 8787
         maxBodyBytes = 262_144L
     }
 

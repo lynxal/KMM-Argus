@@ -128,10 +128,15 @@ export interface ClearedFrame {
 export type StreamFrame = HelloFrame | EventFrame | ClearedFrame | ArgusEvent;
 
 export interface DeviceInfo {
+  /** Device display name, e.g. "Google Pixel 8". */
   name: string;
+  /** host:port the webui connected to. */
   address: string;
   platform: 'android' | 'ios' | 'jvm';
+  /** Host app versionName. */
   version: string;
+  /** Host app applicationId / package name. */
+  pkg: string;
 }
 
 /** UI-facing helpers — label/category maps kept next to the wire types. */
