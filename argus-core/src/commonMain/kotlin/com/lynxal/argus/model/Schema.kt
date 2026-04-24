@@ -22,4 +22,5 @@ public data class HelloPayload(
     val schemaVersion: Int = ARGUS_SCHEMA_VERSION,
     val serverName: String = "argus",
     val serverVersion: String? = null,
+    val appInfo: AppInfo? = null,
 )

@@ -2,6 +2,18 @@ package com.lynxal.argus.model
 
 import com.lynxal.logging.LogLevel
 
+internal fun createTestAppInfo(
+    pkg: String = "com.example.canvas",
+    versionName: String = "1.4.2",
+    device: String = "Pixel 7 Pro",
+    argusVersion: String = "0.1.0",
+): AppInfo = AppInfo(
+    pkg = pkg,
+    versionName = versionName,
+    device = device,
+    argusVersion = argusVersion,
+)
+
 internal fun createTestHeader(
     name: String = "X-Request-Id",
     value: String = "req_9f2c31aa",

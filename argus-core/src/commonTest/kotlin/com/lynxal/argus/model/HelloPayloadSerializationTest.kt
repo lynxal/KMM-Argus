@@ -43,4 +43,25 @@ class HelloPayloadSerializationTest {
         assertTrue(encoded.contains("\"schemaVersion\":42"))
         assertTrue(encoded.contains("\"serverVersion\":\"0.3.1\""))
     }
+
+    @Test
+    fun `HelloPayload with appInfo round-trips`() {
+        val payload = HelloPayload(appInfo = createTestAppInfo())
+
+        val encoded = json.encodeToString(HelloPayload.serializer(), payload)
+        val decoded = json.decodeFromString<HelloPayload>(encoded)
+
+        assertEquals(payload, decoded)
+        assertEquals(createTestAppInfo(), decoded.appInfo)
+    }
+
+    @Test
+    fun `HelloPayload decodes legacy payload without appInfo`() {
+        val legacy = """{"schemaVersion":1,"serverName":"argus","serverVersion":null}"""
+
+        val decoded = Json.decodeFromString<HelloPayload>(legacy)
+
+        assertEquals(null, decoded.appInfo)
+        assertEquals(ARGUS_SCHEMA_VERSION, decoded.schemaVersion)
+    }
 }

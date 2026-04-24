@@ -19,4 +19,5 @@ rootProject.name = "argus"
 include(":argus-core")
 include(":argus-webui")
 include(":argus-webui-bundle")
+include(":argus-server-core")
 include(":sample-android")
