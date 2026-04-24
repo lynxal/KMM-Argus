@@ -20,7 +20,8 @@ const ROW_HEIGHT_COMFY = 32;
  */
 export function createEventList({ store }: EventListProps): HTMLElement {
   const wrapper = document.createElement('div');
-  wrapper.className = 'relative flex-1 min-h-0 bg-bg-panel rounded-md border border-border-default overflow-hidden';
+  wrapper.className =
+    'relative flex-1 min-h-0 flex flex-col bg-bg-panel rounded-md border border-border-default overflow-hidden';
 
   const list = createVirtualList<ArgusEvent>({
     rowHeight: store.density.value === 'comfy' ? ROW_HEIGHT_COMFY : ROW_HEIGHT_COMPACT,
