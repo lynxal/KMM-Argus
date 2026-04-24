@@ -18,6 +18,11 @@ public val DEFAULT_REDACTED_HEADERS: Set<String> = ArgusClientConfig.DEFAULT_RED
  * are consumed by the `ArgusClientPlugin` in `:argus-core` when the caller wires
  * `server.eventBus` into the plugin config. The server itself does not re-redact or
  * re-truncate.
+ *
+ * [port] controls the TCP port the embedded Ktor engine binds to. `0` (default) asks
+ * the OS to assign a free port; any other value pins the server to that port. Use a
+ * fixed value when you want a stable URL for bookmarks or `adb forward`; note that a
+ * pinned port will make `start()` fail if the port is already in use.
  */
 public data class ArgusConfig(
     val appInfo: AppInfo,
@@ -25,4 +30,5 @@ public data class ArgusConfig(
     val maxBodyBytes: Long = 1_000_000L,
     val redactHeaders: Set<String> = DEFAULT_REDACTED_HEADERS,
     val corsDevOrigins: List<String> = listOf("http://localhost:5173"),
+    val port: Int = 0,
 )

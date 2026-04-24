@@ -10,11 +10,20 @@ public class ArgusConfigBuilder internal constructor(private val appInfo: AppInf
     public var redactHeaders: Set<String> = DEFAULT_REDACTED_HEADERS
     public var corsDevOrigins: List<String> = listOf("http://localhost:5173")
 
+    /**
+     * TCP port the embedded server binds to. `0` (default) asks the OS to pick a free
+     * port; any other value pins the server to that port. Use a fixed value when you
+     * need a stable URL (bookmarks, `adb forward`, etc.) — be aware `start()` will
+     * fail if the port is already in use.
+     */
+    public var port: Int = 0
+
     internal fun build(): ArgusConfig = ArgusConfig(
         appInfo = appInfo,
         maxEvents = maxEvents,
         maxBodyBytes = maxBodyBytes,
         redactHeaders = redactHeaders,
         corsDevOrigins = corsDevOrigins,
+        port = port,
     )
 }

@@ -26,7 +26,7 @@ public actual class ArgusServer public actual constructor(private val config: Ar
 
     public actual suspend fun start() {
         check(engine == null) { "ArgusServer.start() called twice without intervening stop()" }
-        val server = embeddedServer(CIO, port = 0) {
+        val server = embeddedServer(CIO, port = config.port) {
             installArgusRoutes(buffer, config.appInfo, config.corsDevOrigins)
         }
         engine = server
