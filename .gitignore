@@ -16,3 +16,6 @@ local.properties
 
 # Claude
 .claude/
+
+# Node tooling (scripts/capture-ui.mjs)
+node_modules/

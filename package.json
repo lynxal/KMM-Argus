@@ -1,0 +1,12 @@
+{
+  "name": "argus-docs-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Doc-tooling for the Argus repo. Provides Playwright for scripts/capture-ui.mjs (regenerates docs/ui/*.png from the design prototype). Not part of the published Argus library.",
+  "scripts": {
+    "capture-ui": "node scripts/capture-ui.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.49.0"
+  }
+}
