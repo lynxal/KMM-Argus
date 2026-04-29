@@ -1,5 +1,6 @@
 // Invariant: this file must not import anything from com.lynxal.argus.*
-// Verified informally via `apkanalyzer dex packages` (Prompt 11 turns it into a CI gate).
+// Enforced by :sample-android:verifyReleaseHasNoArgus (dexdump the release APK for
+// com/lynxal/argus/, io/ktor/server/, com/lynxal/argus/webui/ — fail if any are present).
 package com.lynxal.argus.sample.debug
 
 import android.app.Application

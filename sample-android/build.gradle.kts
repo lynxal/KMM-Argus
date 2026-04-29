@@ -1,3 +1,4 @@
+import java.io.File
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -83,3 +84,71 @@ dependencies {
     debugImplementation(compose.uiTooling)
     debugImplementation(projects.argusAndroid)
 }
+
+// Forbidden dex-internal class prefixes in the release APK. If any of these
+// appear in classes*.dex, the release variant is leaking debug-only code.
+// "Lcom/lynxal/argus/" catches every Argus library subpackage; the sample
+// app's own classes also live under that root, so they're allowed via the
+// sample-namespace exclusion below.
+val forbiddenReleaseDexPrefixes = listOf(
+    "Lcom/lynxal/argus/",
+    "Lio/ktor/server/",
+)
+val allowedReleaseDexPrefixes = listOf(
+    "Lcom/lynxal/argus/sample/",
+)
+
+val verifyReleaseHasNoArgus = tasks.register("verifyReleaseHasNoArgus") {
+    group = "verification"
+    description = "Fails if the release APK contains any com.lynxal.argus.* or Ktor server classes."
+    dependsOn("assembleRelease")
+
+    doLast {
+        val apkDir = layout.buildDirectory.dir("outputs/apk/release").get().asFile
+        val apk = apkDir.listFiles { f -> f.extension == "apk" }?.firstOrNull()
+            ?: error("No release APK found under $apkDir - did assembleRelease run?")
+
+        val sdkRoot = android.sdkDirectory.absolutePath
+        val buildToolsRoot = File(sdkRoot, "build-tools")
+        val buildTools = buildToolsRoot.listFiles { f -> f.isDirectory }
+            ?.maxByOrNull { it.name }
+            ?: error("No Android build-tools found under $buildToolsRoot")
+        val dexdumpFile = File(buildTools, "dexdump")
+        check(dexdumpFile.exists()) { "dexdump not found at ${dexdumpFile.absolutePath}" }
+
+        val process = ProcessBuilder(dexdumpFile.absolutePath, apk.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        val dump = process.inputStream.bufferedReader().readText()
+        val exit = process.waitFor()
+        check(exit == 0) { "dexdump exited with $exit on ${apk.name}\n$dump" }
+
+        val offenders = forbiddenReleaseDexPrefixes.flatMap { prefix ->
+            // dexdump emits e.g. `Class descriptor  : 'Lcom/lynxal/argus/Foo;'`
+            Regex("""'(${Regex.escape(prefix)}[^']+)'""")
+                .findAll(dump)
+                .map { it.groupValues[1] }
+                .toList()
+        }.distinct().filterNot { descriptor ->
+            allowedReleaseDexPrefixes.any { descriptor.startsWith(it) }
+        }
+
+        if (offenders.isNotEmpty()) {
+            val msg = buildString {
+                appendLine("Release APK contains forbidden classes:")
+                appendLine("  apk: ${apk.absolutePath}")
+                offenders.take(50).forEach { appendLine("    - $it") }
+                if (offenders.size > 50) appendLine("    ... and ${offenders.size - 50} more")
+                appendLine()
+                appendLine("Consumers must consume Argus only via debugImplementation.")
+                appendLine("Release source sets must not import com.lynxal.argus.* - see")
+                appendLine("src/androidRelease/.../DebugToolsImpl.kt for the seam contract.")
+            }
+            throw GradleException(msg)
+        }
+
+        logger.lifecycle("verifyReleaseHasNoArgus: ${apk.name} is clean (0 forbidden classes).")
+    }
+}
+
+tasks.named("check") { dependsOn(verifyReleaseHasNoArgus) }
