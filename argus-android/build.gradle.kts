@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.vanniktechMavenPublish)
+    id("signing")
 }
 
 kotlin {
@@ -50,5 +52,39 @@ android {
 
     kotlin {
         jvmToolchain((findProperty("jvm.version") as String).toInt())
+    }
+}
+
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+
+    coordinates("com.lynxal.argus", "argus-android", "0.0.1")
+    pom {
+        name.set("Argus Android")
+        description.set("Android entry point for Argus debug tooling — wires argus-core + argus-server-core into an Android app via debugImplementation. Release builds must contain zero classes from this artifact.")
+        url.set("https://github.com/lynxal/argus")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://github.com/lynxal/argus/blob/main/LICENSE")
+            }
+        }
+        issueManagement {
+            system.set("GitHub Issues")
+            url.set("https://github.com/lynxal/argus/issues")
+        }
+        developers {
+            developer {
+                id.set("VardanK")
+                name.set("Vardan Kurkchiyan")
+                email.set("central.repo@Lynxal.com")
+            }
+        }
+        scm {
+            connection.set("scm:git:git://github.com:lynxal/argus.git")
+            developerConnection.set("scm:git:ssh://github.com:lynxal/argus.git")
+            url.set("https://github.com/lynxal/argus")
+        }
     }
 }

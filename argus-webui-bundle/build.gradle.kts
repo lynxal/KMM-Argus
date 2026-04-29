@@ -7,6 +7,8 @@ import java.util.zip.GZIPOutputStream
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.vanniktechMavenPublish)
+    id("signing")
 }
 
 val useStaticFramework = findProperty("useStaticFramework")?.toString()?.toBoolean() ?: true
@@ -165,4 +167,38 @@ val generateBundle = tasks.register<GenerateBundleTask>("generateBundle") {
 
 kotlin.sourceSets.named("commonMain") {
     kotlin.srcDir(generateBundle.map { it.outputDir })
+}
+
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+
+    coordinates("com.lynxal.argus", "argus-webui-bundle", "0.0.1")
+    pom {
+        name.set("Argus WebUI Bundle")
+        description.set("KMP module that bundles the pre-built Argus web UI as gzipped Base64 byte streams for serving from argus-server-core.")
+        url.set("https://github.com/lynxal/argus")
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://github.com/lynxal/argus/blob/main/LICENSE")
+            }
+        }
+        issueManagement {
+            system.set("GitHub Issues")
+            url.set("https://github.com/lynxal/argus/issues")
+        }
+        developers {
+            developer {
+                id.set("VardanK")
+                name.set("Vardan Kurkchiyan")
+                email.set("central.repo@Lynxal.com")
+            }
+        }
+        scm {
+            connection.set("scm:git:git://github.com:lynxal/argus.git")
+            developerConnection.set("scm:git:ssh://github.com:lynxal/argus.git")
+            url.set("https://github.com/lynxal/argus")
+        }
+    }
 }
