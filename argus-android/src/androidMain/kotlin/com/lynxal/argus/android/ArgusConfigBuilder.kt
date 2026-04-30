@@ -18,6 +18,11 @@ public class ArgusConfigBuilder internal constructor(private val appInfo: AppInf
      */
     public var port: Int = 0
 
+    /** Persist events across app restarts. See [ArgusConfig.persist]. */
+    public var persist: Boolean = false
+    public var persistMaxSizeMb: Long = 100
+    public var persistMaxAgeDays: Int = 7
+
     internal fun build(): ArgusConfig = ArgusConfig(
         appInfo = appInfo,
         maxEvents = maxEvents,
@@ -25,5 +30,8 @@ public class ArgusConfigBuilder internal constructor(private val appInfo: AppInf
         redactHeaders = redactHeaders,
         corsDevOrigins = corsDevOrigins,
         port = port,
+        persist = persist,
+        persistMaxSizeMb = persistMaxSizeMb,
+        persistMaxAgeDays = persistMaxAgeDays,
     )
 }

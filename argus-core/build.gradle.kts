@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.vanniktechMavenPublish)
+    alias(libs.plugins.sqldelight)
     id("signing")
 }
 
@@ -20,12 +21,16 @@ kotlin {
 
     jvm()
 
+    applyDefaultHierarchyTemplate()
+
     sourceSets {
         commonMain {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
+                implementation(libs.sqldelight.runtime)
+                implementation(libs.sqldelight.coroutines.extensions)
                 api(libs.lynxal.logging)
             }
         }
@@ -36,10 +41,25 @@ kotlin {
                 implementation(libs.ktor.client.mock)
             }
         }
+        getByName("jvmTest").dependencies {
+            implementation(libs.sqldelight.sqlite.driver)
+        }
+        val jvmAndAndroidMain by creating { dependsOn(commonMain.get()) }
+        getByName("jvmMain").dependsOn(jvmAndAndroidMain)
+        getByName("androidMain").dependsOn(jvmAndAndroidMain)
     }
 
     compilerOptions {
         freeCompilerArgs.add("-opt-in=kotlin.time.ExperimentalTime")
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+}
+
+sqldelight {
+    databases {
+        create("ArgusDatabase") {
+            packageName.set("com.lynxal.argus.db")
+        }
     }
 }
 

@@ -18,4 +18,5 @@ public data class LogEvent(
     val message: String,
     val payload: Map<String, String> = emptyMap(),
     val throwable: ThrowableInfo? = null,
+    val correlationId: String? = null,
 ) : ArgusEvent

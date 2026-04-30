@@ -13,6 +13,7 @@ kotlin {
             api(projects.argusCore)
             api(projects.argusServerCore)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.sqldelight.android.driver)
         }
         getByName("androidUnitTest").dependencies {
             implementation(kotlin("test"))

@@ -1,6 +1,8 @@
 package com.lynxal.argus.server
 
 import com.lynxal.argus.model.ArgusEventBus
+import com.lynxal.argus.persistence.EventStore
+import com.lynxal.argus.persistence.NoopEventStore
 import com.lynxal.argus.server.buffer.EventRingBuffer
 import com.lynxal.argus.server.bus.ChannelEventBus
 import com.lynxal.argus.server.routes.installArgusRoutes
@@ -10,9 +12,19 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import kotlin.concurrent.Volatile
 
-public actual class ArgusServer public actual constructor(private val config: ArgusConfig) {
+public actual class ArgusServer public actual constructor(
+    private val config: ArgusConfig,
+    private val eventStore: EventStore,
+    private val sessionId: String,
+) {
 
-    private val buffer: EventRingBuffer = EventRingBuffer(maxEvents = config.maxEvents)
+    private val buffer: EventRingBuffer = EventRingBuffer(
+        maxEvents = config.maxEvents,
+        eventStore = eventStore,
+        sessionId = sessionId,
+        persistMaxSizeMb = config.persistMaxSizeMb,
+        persistMaxAgeDays = config.persistMaxAgeDays,
+    )
 
     public actual val eventBus: ArgusEventBus = ChannelEventBus(buffer)
 
@@ -27,6 +39,12 @@ public actual class ArgusServer public actual constructor(private val config: Ar
 
     public actual suspend fun start() {
         check(engine == null) { "ArgusServer.start() called twice without intervening stop()" }
+        if (eventStore !== NoopEventStore) {
+            val seed = runCatching {
+                eventStore.previousSessionEvents(sessionId, config.maxEvents)
+            }.getOrDefault(emptyList())
+            buffer.hydrate(seed)
+        }
         val server = embeddedServer(CIO, port = config.port) {
             installArgusRoutes(buffer, config.appInfo, config.corsDevOrigins)
         }
@@ -40,5 +58,6 @@ public actual class ArgusServer public actual constructor(private val config: Ar
         engine = null
         resolvedPort = -1
         buffer.close()
+        if (eventStore !== NoopEventStore) eventStore.close()
     }
 }

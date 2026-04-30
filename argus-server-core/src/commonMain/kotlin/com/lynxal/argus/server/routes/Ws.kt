@@ -2,6 +2,7 @@ package com.lynxal.argus.server.routes
 
 import com.lynxal.argus.model.ARGUS_SCHEMA_VERSION
 import com.lynxal.argus.model.AppInfo
+import com.lynxal.argus.model.ArgusJson
 import com.lynxal.argus.server.buffer.EventRingBuffer
 import com.lynxal.argus.server.filter.EventFilter
 import com.lynxal.argus.server.protocol.InboundMessage

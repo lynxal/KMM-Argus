@@ -1,6 +1,7 @@
 package com.lynxal.argus.server.routes
 
 import com.lynxal.argus.model.AppInfo
+import com.lynxal.argus.model.ArgusJson
 import com.lynxal.argus.server.buffer.EventRingBuffer
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod

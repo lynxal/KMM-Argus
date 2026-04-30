@@ -10,6 +10,15 @@ public class ArgusClientConfig {
     public var captureRequestBody: Boolean = true
     public var captureResponseBody: Boolean = true
 
+    /**
+     * Hosts whose request and response bodies bypass [maxBodyBytes] and are captured
+     * in full. Match is case-insensitive on the request URL host (no port, no scheme).
+     *
+     * Use sparingly — a misbehaving endpoint with a multi-GB body will be held in
+     * memory for the lifetime of the capture. Argus enforces no safety ceiling here.
+     */
+    public var fullBodyHosts: Set<String> = emptySet()
+
     public companion object {
         public const val DEFAULT_MAX_BODY_BYTES: Long = 1_000_000L
 

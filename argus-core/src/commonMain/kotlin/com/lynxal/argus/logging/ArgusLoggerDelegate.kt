@@ -1,5 +1,6 @@
 package com.lynxal.argus.logging
 
+import com.lynxal.argus.correlation.CorrelationThreadLocal
 import com.lynxal.argus.model.ArgusEventBus
 import com.lynxal.argus.model.LogEvent
 import com.lynxal.argus.model.toThrowableInfo
@@ -23,9 +24,10 @@ import kotlin.uuid.Uuid
  * adds a *stricter* per-delegate filter on top of that, defaulting to `Verbose` (no extra
  * filtering).
  *
- * Phase 2 will introduce per-request correlation by reading an `ArgusCorrelationId`
- * from `CoroutineContext.Element` here and threading it onto `LogEvent`. For the MVP
- * the Argus UI pairs logs with HTTP events via a server-side time-window heuristic.
+ * If the call site is wrapped in `withCorrelation { ... }`, the active correlation id is
+ * stamped on the emitted [LogEvent] so the inspector can pair it with the matching
+ * `HttpEvent`. The id is propagated to the synchronous `log` callback via a thread-local
+ * bridge installed by [com.lynxal.argus.correlation.ArgusCorrelationId.updateThreadContext].
  *
  * @see LoggerImplementation the single-method KMMLogging contract
  * @see ArgusEventBus the publish sink; pass [com.lynxal.argus.model.NoopEventBus] in
@@ -49,6 +51,7 @@ public class ArgusLoggerDelegate(
                 message = truncate(logDetails.message),
                 payload = capPayload(logDetails.payload),
                 throwable = logDetails.cause?.toThrowableInfo(config.captureStackTraces),
+                correlationId = CorrelationThreadLocal.get(),
             )
         )
     }

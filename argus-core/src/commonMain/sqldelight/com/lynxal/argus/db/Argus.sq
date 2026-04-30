@@ -1,0 +1,49 @@
+-- Argus persistence schema (Phase 2).
+--
+-- Single `event` table backs every ArgusEvent subclass; the polymorphic payload is the
+-- ArgusJson-serialized form so on-the-wire and on-disk shapes match. `session_id` tags
+-- each row with the Argus.start() invocation that emitted it; rehydration on startup
+-- pulls the most recent session that isn't the current one — a hard process kill
+-- doesn't need any cleanup because there's no session lifecycle table to keep in sync.
+
+CREATE TABLE event (
+    id TEXT NOT NULL PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    timestamp_ms INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    correlation_id TEXT,
+    size_bytes INTEGER NOT NULL,
+    payload TEXT NOT NULL
+);
+
+CREATE INDEX event_session_idx ON event(session_id, timestamp_ms);
+CREATE INDEX event_timestamp_idx ON event(timestamp_ms);
+
+insertEvent:
+INSERT INTO event(id, session_id, timestamp_ms, source, correlation_id, size_bytes, payload)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteEventsOlderThan:
+DELETE FROM event WHERE timestamp_ms < :cutoffMs;
+
+eventSizesAscending:
+SELECT id, size_bytes FROM event ORDER BY timestamp_ms ASC;
+
+deleteEventsByIds:
+DELETE FROM event WHERE id IN ?;
+
+totalSizeBytes:
+SELECT COALESCE(SUM(size_bytes), 0) AS total FROM event;
+
+-- Most recent session that is *not* the supplied current session id, ranked by
+-- newest event timestamp. Used at startup to identify the previous run's events.
+previousSessionId:
+SELECT session_id
+FROM event
+WHERE session_id != :currentSessionId
+GROUP BY session_id
+ORDER BY MAX(timestamp_ms) DESC
+LIMIT 1;
+
+eventsForSession:
+SELECT payload FROM event WHERE session_id = :sessionId ORDER BY timestamp_ms ASC LIMIT :limit;

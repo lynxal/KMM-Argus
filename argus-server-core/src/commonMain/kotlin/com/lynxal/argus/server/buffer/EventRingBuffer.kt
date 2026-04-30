@@ -1,6 +1,10 @@
 package com.lynxal.argus.server.buffer
 
 import com.lynxal.argus.model.ArgusEvent
+import com.lynxal.argus.model.ArgusJson
+import com.lynxal.argus.persistence.EventStore
+import com.lynxal.argus.persistence.NoopEventStore
+import kotlinx.coroutines.IO
 import com.lynxal.argus.server.protocol.OutboundMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +50,10 @@ import kotlin.coroutines.CoroutineContext
  */
 public class EventRingBuffer internal constructor(
     private val maxEvents: Int,
+    private val eventStore: EventStore = NoopEventStore,
+    private val sessionId: String = NoopEventStore.NO_SESSION,
+    private val persistMaxSizeMb: Long = 100,
+    private val persistMaxAgeDays: Int = 7,
     parentContext: CoroutineContext = SupervisorJob() + Dispatchers.Default.limitedParallelism(1),
 ) {
 
@@ -58,9 +66,23 @@ public class EventRingBuffer internal constructor(
 
     private val _subscribers = MutableStateFlow<List<SendChannel<OutboundMessage>>>(emptyList())
 
+    private val persistEnabled = eventStore !== NoopEventStore
+    private var insertsSincePrune: Int = 0
+
     init {
         require(maxEvents > 0) { "maxEvents must be positive, got $maxEvents" }
         scope.launch { for (op in inbox) apply(op) }
+    }
+
+    /**
+     * Prepend [events] from a previous session into the ring buffer without
+     * broadcasting or re-persisting them. Idempotent — events already in the ring
+     * keep their position. Call before any subscribers connect so the WebSocket
+     * `/api/events` snapshot reflects the rehydrated state.
+     */
+    public fun hydrate(events: List<ArgusEvent>) {
+        if (events.isEmpty()) return
+        inbox.trySend(Op.Hydrate(events))
     }
 
     public fun offer(event: ArgusEvent) {
@@ -97,11 +119,39 @@ public class EventRingBuffer internal constructor(
                 events.addLast(op.event)
                 _snapshot.value = events.toList()
                 broadcast(OutboundMessage.Event(op.event))
+                if (persistEnabled) persistAsync(op.event)
             }
             Op.Clear -> {
                 events.clear()
                 _snapshot.value = emptyList()
                 broadcast(OutboundMessage.Cleared)
+            }
+            is Op.Hydrate -> {
+                val incoming = op.events.takeLast(maxEvents)
+                for (e in incoming) {
+                    if (events.size >= maxEvents) events.removeFirst()
+                    events.addLast(e)
+                }
+                _snapshot.value = events.toList()
+                // Intentional: no broadcast (subscribers haven't connected yet) and
+                // no persistence (these events are already on disk).
+            }
+        }
+    }
+
+    private fun persistAsync(event: ArgusEvent) {
+        val sizeBytes = ArgusJson
+            .encodeToString(ArgusEvent.serializer(), event)
+            .encodeToByteArray()
+            .size.toLong()
+        scope.launch(Dispatchers.IO) {
+            runCatching { eventStore.append(event, sessionId, sizeBytes) }
+        }
+        insertsSincePrune++
+        if (insertsSincePrune >= PRUNE_EVERY) {
+            insertsSincePrune = 0
+            scope.launch(Dispatchers.IO) {
+                runCatching { eventStore.pruneByRetention(persistMaxSizeMb, persistMaxAgeDays) }
             }
         }
     }
@@ -122,10 +172,12 @@ public class EventRingBuffer internal constructor(
 
     private sealed interface Op {
         data class Publish(val event: ArgusEvent) : Op
+        data class Hydrate(val events: List<ArgusEvent>) : Op
         data object Clear : Op
     }
 
     public companion object {
         public const val DEFAULT_SUBSCRIBER_CAPACITY: Int = 1024
+        private const val PRUNE_EVERY: Int = 50
     }
 }

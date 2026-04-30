@@ -2,6 +2,7 @@
 
 package com.lynxal.argus.ktor
 
+import com.lynxal.argus.correlation.ArgusCorrelationId
 import com.lynxal.argus.model.ArgusEventBus
 import com.lynxal.argus.model.Header
 import com.lynxal.argus.model.HttpError
@@ -18,6 +19,7 @@ import io.ktor.client.statement.HttpResponse as KtorHttpResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.util.split
 import io.ktor.utils.io.InternalAPI
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -33,6 +35,8 @@ public val Argus: ClientPlugin<ArgusClientConfig> = createClientPlugin("Argus", 
         val startMs = Clock.System.now().toEpochMilliseconds()
         request.attributes.put(ArgusIdKey, id)
         request.attributes.put(ArgusStartMsKey, startMs)
+        coroutineContext[ArgusCorrelationId]?.value
+            ?.let { request.attributes.put(ArgusCorrelationKey, it) }
 
         val method = request.method.value
         val url = request.url.buildString()
@@ -40,10 +44,13 @@ public val Argus: ClientPlugin<ArgusClientConfig> = createClientPlugin("Argus", 
         val path = request.url.build().encodedPath.ifEmpty { "/" }
         val headers = request.headers.build().toArgusHeaders(cfg.redactHeaders)
 
+        val effectiveMaxBytes = effectiveMaxBytes(host, cfg)
+        request.attributes.put(ArgusMaxBodyBytesKey, effectiveMaxBytes)
+
         val reqBody: CapturedBody? = if (cfg.captureRequestBody) {
             val ctHeader = request.headers[HttpHeaders.ContentType]?.let { runCatching { io.ktor.http.ContentType.parse(it) }.getOrNull() }
             runCatching {
-                captureRequestPayload(content, ctHeader, cfg.maxBodyBytes)
+                captureRequestPayload(content, ctHeader, effectiveMaxBytes)
             }.getOrNull()
         } else null
 
@@ -70,14 +77,15 @@ public val Argus: ClientPlugin<ArgusClientConfig> = createClientPlugin("Argus", 
             val wrappedCall = response.call.replaceResponse { relaySide }
             val wrappedResponse = wrappedCall.response
 
+            val maxBytes = response.call.attributes.getOrNull(ArgusMaxBodyBytesKey) ?: cfg.maxBodyBytes
             response.launch {
                 val emitted = runCatching {
-                    val (bytes, total) = captureSide.drainWithCap(cfg.maxBodyBytes)
+                    val (bytes, total) = captureSide.drainWithCap(maxBytes)
                     val body = encodeCapturedBytes(
                         bytes = bytes,
                         contentType = wrappedResponse.contentTypeOrNull(),
                         totalSize = total,
-                        maxBytes = cfg.maxBodyBytes,
+                        maxBytes = maxBytes,
                     )
                     emitSuccess(bus, cfg, wrappedCall, wrappedResponse, body)
                 }
@@ -110,6 +118,12 @@ public val Argus: ClientPlugin<ArgusClientConfig> = createClientPlugin("Argus", 
 private fun KtorHttpResponse.contentTypeOrNull(): io.ktor.http.ContentType? {
     val header = headers[HttpHeaders.ContentType] ?: return null
     return runCatching { io.ktor.http.ContentType.parse(header) }.getOrNull()
+}
+
+private fun effectiveMaxBytes(host: String, cfg: ArgusClientConfig): Long {
+    if (cfg.fullBodyHosts.isEmpty()) return cfg.maxBodyBytes
+    val match = cfg.fullBodyHosts.any { it.equals(host, ignoreCase = true) }
+    return if (match) Long.MAX_VALUE else cfg.maxBodyBytes
 }
 
 private fun emitSuccess(
@@ -147,6 +161,7 @@ private fun emitSuccess(
             response = argusResponse,
             error = null,
             durationMs = durationMs,
+            correlationId = attrs.getOrNull(ArgusCorrelationKey),
         ),
     )
 }
@@ -173,6 +188,7 @@ private fun emitError(
             response = null,
             error = throwable.toHttpError(),
             durationMs = durationMs,
+            correlationId = attrs.getOrNull(ArgusCorrelationKey),
         ),
     )
 }
@@ -199,6 +215,7 @@ private fun emitNetworkError(
             response = null,
             error = throwable.toHttpError(),
             durationMs = durationMs,
+            correlationId = attrs.getOrNull(ArgusCorrelationKey),
         ),
     )
 }

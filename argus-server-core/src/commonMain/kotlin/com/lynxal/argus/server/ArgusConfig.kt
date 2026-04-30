@@ -31,4 +31,20 @@ public data class ArgusConfig(
     val redactHeaders: Set<String> = DEFAULT_REDACTED_HEADERS,
     val corsDevOrigins: List<String> = listOf("http://localhost:5173"),
     val port: Int = 0,
+    /**
+     * Persist captured events to disk so a process restart doesn't erase the timeline.
+     * Disabled by default; opt in via `argus { persist = true }`. The platform host
+     * (currently `:argus-android`) supplies the SQLite driver factory.
+     */
+    val persist: Boolean = false,
+    /**
+     * Soft cap on persisted-event payload size in megabytes. Whichever-fires-first with
+     * [persistMaxAgeDays]. The oldest events are dropped when this is exceeded.
+     */
+    val persistMaxSizeMb: Long = 100,
+    /**
+     * Soft cap on persisted-event age in days. Whichever-fires-first with
+     * [persistMaxSizeMb].
+     */
+    val persistMaxAgeDays: Int = 7,
 )
