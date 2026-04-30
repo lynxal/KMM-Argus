@@ -67,6 +67,14 @@ fun SampleScreen(
 
             item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
 
+            item {
+                FullWidthButton("Correlated pair: /users/1 → /posts") {
+                    actions.onCorrelatedPair(USERS_URL, POSTS_URL)
+                }
+            }
+
+            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+
             item { FullWidthButton("Emit VERBOSE log") { actions.onEmit(LogLevel.Verbose, "Emit VERBOSE log") } }
             item { FullWidthButton("Emit DEBUG log") { actions.onEmit(LogLevel.Debug, "Emit DEBUG log") } }
             item { FullWidthButton("Emit INFO log") { actions.onEmit(LogLevel.Info, "Emit INFO log") } }
