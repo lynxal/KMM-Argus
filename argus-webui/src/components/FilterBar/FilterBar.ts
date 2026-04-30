@@ -40,6 +40,11 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
   const bar = document.createElement('div');
   bar.className = styles.bar;
 
+  const row1 = document.createElement('div');
+  row1.className = styles.row;
+  const row2 = document.createElement('div');
+  row2.className = styles.row;
+
   const binders: ChipBinder[] = [];
 
   // Source chips
@@ -67,8 +72,6 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
   // live stream.
   const sourceLabelDropdown = createSourceLabelDropdown(store);
 
-  const div1 = spacerDivider();
-
   // Method chips
   const methodGroup = document.createElement('div');
   methodGroup.className = styles.group;
@@ -88,8 +91,6 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
       chip.className = active ? `${base} ${styles.chipActive}` : `${base} ${styles.chipInactive}`;
     });
   }
-
-  const div2 = spacerDivider();
 
   // Status chips (2xx / 3xx / 4xx / 5xx / ERR with dots)
   const statusGroup = document.createElement('div');
@@ -115,8 +116,6 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
     });
   }
 
-  const div3 = spacerDivider();
-
   // Level chips
   const levelGroup = document.createElement('div');
   levelGroup.className = styles.group;
@@ -137,8 +136,6 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
       chip.className = active ? `${base} ${tone.bg} ${styles.chipActive}` : `${base} ${styles.chipInactive}`;
     });
   }
-
-  const div4 = spacerDivider();
 
   // Text inputs
   const hostInput = makeInput('host', 'host-contains', store, 'hostQuery');
@@ -171,16 +168,12 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
     textInput.value = '';
   });
 
-  bar.append(
-    srcGroup,
-    sourceLabelDropdown,
-    div1,
-    methodGroup,
-    div2,
+  row1.append(srcGroup, sourceLabelDropdown, spacerDivider(), methodGroup);
+  row2.append(
     statusGroup,
-    div3,
+    spacerDivider(),
     levelGroup,
-    div4,
+    spacerDivider(),
     hostInput,
     tagInput,
     textInput,
@@ -188,6 +181,7 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
     count,
     clearLink,
   );
+  bar.append(row1, row2);
 
   // Bind membership states
   effect(() => {

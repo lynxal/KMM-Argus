@@ -1,5 +1,6 @@
 export const styles = {
-  bar: 'h-9 flex items-center gap-3 px-2 bg-bg-panel border-b border-border-default overflow-x-auto',
+  bar: 'flex flex-col bg-bg-panel border-b border-border-default',
+  row: 'h-9 flex items-center gap-3 px-2 overflow-x-auto',
   group: 'flex items-center gap-1',
   label: 'text-fg-3 text-xs font-medium font-ui uppercase tracking-wider mr-1',
   chip: 'flex items-center justify-center px-2 h-6 rounded-sm border border-transparent bg-bg-subtle text-fg-2 text-xs font-ui font-medium cursor-pointer transition-colors duration-base',
