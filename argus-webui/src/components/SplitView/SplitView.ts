@@ -1,11 +1,13 @@
 import { effect } from '@preact/signals-core';
 import type { EventStore } from '../../store/eventStore';
+import type { ShortcutBus } from '../../input/keyboard';
 import { createEventList } from '../EventList/EventList';
 import { createEventDetail } from '../EventDetail/EventDetail';
 import { createWaterfall } from '../Waterfall/Waterfall';
 
 export interface SplitViewProps {
   readonly store: EventStore;
+  readonly bus: ShortcutBus;
 }
 
 /**
@@ -16,13 +18,13 @@ export interface SplitViewProps {
  * @see design_handoff_argus_inspector/argus/Inspector.jsx — the shell that
  *      composes these in the React reference.
  */
-export function createSplitView({ store }: SplitViewProps): HTMLElement {
+export function createSplitView({ store, bus }: SplitViewProps): HTMLElement {
   const root = document.createElement('div');
   root.className = 'flex-1 p-2 flex gap-2 min-h-0 min-w-0 overflow-hidden';
 
   const list = createEventList({ store });
   list.classList.add('flex-1');
-  const detail = createEventDetail({ store });
+  const detail = createEventDetail({ store, bus });
   detail.classList.add('flex-1');
   const waterfall = createWaterfall({ store });
   waterfall.classList.add('flex-[2]');

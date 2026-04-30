@@ -1,5 +1,6 @@
 import { effect } from '@preact/signals-core';
 import type { EventStore } from '../../store/eventStore';
+import type { ShortcutBus } from '../../input/keyboard';
 import {
   ALL_LEVELS,
   ALL_METHODS,
@@ -22,6 +23,7 @@ import {
 
 export interface FilterBarProps {
   readonly store: EventStore;
+  readonly bus: ShortcutBus;
 }
 
 type ChipBinder = (active: boolean) => void;
@@ -33,7 +35,7 @@ type ChipBinder = (active: boolean) => void;
  *
  * @see design_handoff_argus_inspector/argus/FilterBar.jsx
  */
-export function createFilterBar({ store }: FilterBarProps): HTMLElement {
+export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
   const bar = document.createElement('div');
   bar.className = styles.bar;
 
@@ -201,6 +203,15 @@ export function createFilterBar({ store }: FilterBarProps): HTMLElement {
     if (hostInput.value !== f.hostQuery) hostInput.value = f.hostQuery;
     if (tagInput.value !== f.tagQuery) tagInput.value = f.tagQuery;
     if (textInput.value !== f.textQuery) textInput.value = f.textQuery;
+  });
+
+  // `f` shortcut: focus the first text filter input so the user can start
+  // typing a host query immediately.
+  effect(() => {
+    if (bus.openFilter.value > 0) {
+      hostInput.focus();
+      hostInput.select();
+    }
   });
 
   return bar;

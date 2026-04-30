@@ -58,6 +58,9 @@ export interface ShortcutBus {
   readonly openFilter: Signal<number>;
   readonly openShortcuts: Signal<boolean>;
   readonly toast: Signal<{ msg: string; at: number } | null>;
+  /** Tick incremented each time the keyboard requests a tab cycle. */
+  readonly prevTab: Signal<number>;
+  readonly nextTab: Signal<number>;
 }
 
 export function createShortcutBus(): ShortcutBus {
@@ -66,6 +69,8 @@ export function createShortcutBus(): ShortcutBus {
     openFilter: signal(0),
     openShortcuts: signal(false),
     toast: signal(null),
+    prevTab: signal(0),
+    nextTab: signal(0),
   };
 }
 
@@ -144,10 +149,10 @@ export function installKeyboard(
         store.view.value = pickCycleNext(store.view.value);
         break;
       case 'prevTab':
+        bus.prevTab.value = bus.prevTab.value + 1;
+        break;
       case 'nextTab':
-        // Tab cycling is handled by EventDetail via a local signal — the
-        // keyboard bus forwards the intent; EventDetail subscribes.
-        bus.focusSearch.value = bus.focusSearch.value; // no-op placeholder to keep linter happy
+        bus.nextTab.value = bus.nextTab.value + 1;
         break;
       case 'openShortcuts':
         bus.openShortcuts.value = !bus.openShortcuts.value;

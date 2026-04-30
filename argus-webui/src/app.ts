@@ -49,14 +49,14 @@ export function mountApp(root: HTMLElement): void {
 
   const topBar = createTopBar({ store, source, bus });
   const connectionBanner = createConnectionBanner({ source });
-  const filterBar = createFilterBar({ store });
+  const filterBar = createFilterBar({ store, bus });
   shell.append(topBar, connectionBanner, filterBar);
 
   const contentHost = document.createElement('div');
   contentHost.className = 'flex-1 min-h-0 flex';
   shell.appendChild(contentHost);
 
-  const split = createSplitView({ store });
+  const split = createSplitView({ store, bus });
   const waiting = createWaitingForEvents({ source });
   waiting.classList.add('flex-1');
 

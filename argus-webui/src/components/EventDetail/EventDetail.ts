@@ -1,5 +1,6 @@
 import { effect } from '@preact/signals-core';
 import type { EventStore } from '../../store/eventStore';
+import type { ShortcutBus } from '../../input/keyboard';
 import {
   type ArgusEvent,
   isCustomEvent,
@@ -12,13 +13,14 @@ import { createCustomTabs, CUSTOM_TABS } from './tabs/CustomTabs';
 
 export interface EventDetailProps {
   readonly store: EventStore;
+  readonly bus: ShortcutBus;
 }
 
 /**
  * Tab router. Switches on the selected event's kind; routes to the
  * corresponding tab view. Empty state when nothing is selected.
  */
-export function createEventDetail({ store }: EventDetailProps): HTMLElement {
+export function createEventDetail({ store, bus }: EventDetailProps): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className =
     'flex-1 min-h-0 flex flex-col bg-bg-panel rounded-md border border-border-default overflow-hidden';
@@ -69,6 +71,30 @@ export function createEventDetail({ store }: EventDetailProps): HTMLElement {
     else if (isLogEvent(evt)) content.appendChild(createLogTabs({ event: evt, active }));
     else if (isCustomEvent(evt)) content.appendChild(createCustomTabs({ event: evt, active }));
   }
+
+  // Tab cycling via [ / ] shortcuts. Rotates the active tab for the kind of
+  // the currently selected event; no-op when nothing is selected.
+  function cycleTab(direction: -1 | 1): void {
+    const id = store.selectedId.peek();
+    if (!id) return;
+    const evt = store.events.peek().find((e) => e.id === id);
+    if (!evt) return;
+    const kind = evt.source;
+    const tabs: readonly string[] =
+      kind === 'HTTP' ? HTTP_TABS : kind === 'LOG' ? LOG_TABS : CUSTOM_TABS;
+    const cur = store.detailTab.peek()[kind];
+    const idx = tabs.indexOf(cur);
+    const safeIdx = idx < 0 ? 0 : idx;
+    const next = (safeIdx + direction + tabs.length) % tabs.length;
+    store.detailTab.value = { ...store.detailTab.peek(), [kind]: tabs[next]! };
+  }
+
+  effect(() => {
+    if (bus.prevTab.value > 0) cycleTab(-1);
+  });
+  effect(() => {
+    if (bus.nextTab.value > 0) cycleTab(1);
+  });
 
   return wrapper;
 }
