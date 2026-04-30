@@ -148,18 +148,40 @@ function renderTiming(event: HttpEvent): HTMLElement {
   const wait = segment('Wait', 0.55, 'bg-wf-wait');
   const download = segment('Download', 0.3, 'bg-wf-receive');
   bar.append(connect, wait, download);
+
+  const total = document.createElement('div');
+  total.className = 'text-fg-3 text-xs font-mono';
+  total.textContent = `total ${dur} ms`;
+
   const legend = document.createElement('div');
-  legend.className = 'text-fg-3 text-xs font-mono';
-  legend.textContent = `total ${dur} ms`;
-  box.append(bar, legend);
+  legend.className = 'flex flex-wrap gap-3 text-fg-2 text-xs font-ui';
+  legend.append(
+    legendItem('Connect', 'bg-wf-connect'),
+    legendItem('Wait', 'bg-wf-wait'),
+    legendItem('Download', 'bg-wf-receive'),
+  );
+
+  box.append(bar, total, legend);
   return box;
 }
 
-function segment(_label: string, weight: number, color: string): HTMLElement {
+function segment(label: string, weight: number, color: string): HTMLElement {
   const el = document.createElement('div');
   el.className = color;
   el.style.flexGrow = String(weight);
+  el.title = label;
   return el;
+}
+
+function legendItem(label: string, color: string): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'flex items-center gap-1';
+  const swatch = document.createElement('span');
+  swatch.className = `inline-block w-2 h-2 rounded-xs ${color}`;
+  const text = document.createElement('span');
+  text.textContent = label;
+  wrapper.append(swatch, text);
+  return wrapper;
 }
 
 function renderRelatedLogs(event: HttpEvent, store: EventStore): HTMLElement {
