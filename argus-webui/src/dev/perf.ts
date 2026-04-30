@@ -49,6 +49,7 @@ function generateEvents(n: number): ArgusEvent[] {
         id: `e${i}`,
         timestamp: Date.now() + i,
         source: 'HTTP',
+        engine: 'ktor',
         request: {
           method: ['GET', 'POST', 'PUT', 'DELETE'][r % 4] ?? 'GET',
           url: `https://api.example.com/v1/items/${i}`,

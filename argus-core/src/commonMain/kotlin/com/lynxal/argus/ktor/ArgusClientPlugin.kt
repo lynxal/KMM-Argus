@@ -166,6 +166,7 @@ private fun emitSuccess(
             error = null,
             durationMs = durationMs,
             correlationId = attrs.getOrNull(ArgusCorrelationKey),
+            engine = "ktor",
         ),
     )
 }
@@ -193,6 +194,7 @@ private fun emitError(
             error = throwable.toHttpError(),
             durationMs = durationMs,
             correlationId = attrs.getOrNull(ArgusCorrelationKey),
+            engine = "ktor",
         ),
     )
 }
@@ -220,6 +222,7 @@ private fun emitNetworkError(
             error = throwable.toHttpError(),
             durationMs = durationMs,
             correlationId = attrs.getOrNull(ArgusCorrelationKey),
+            engine = "ktor",
         ),
     )
 }

@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
  * older clients cannot decode. This is independent of the library's semver —
  * consumers pin on semver but negotiate wire compatibility on this constant.
  */
-public const val ARGUS_SCHEMA_VERSION: Int = 1
+public const val ARGUS_SCHEMA_VERSION: Int = 2
 
 /**
  * First message the server sends over the WebSocket stream on connect.

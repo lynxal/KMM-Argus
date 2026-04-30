@@ -8,6 +8,7 @@ describe('buildCurl', () => {
     id: 'e1',
     timestamp: 0,
     source: 'HTTP',
+    engine: 'ktor',
     durationMs: 1,
     request: {
       method: 'POST',

@@ -6,9 +6,9 @@ import kotlin.test.assertEquals
 class SchemaVersionTest {
 
     @Test
-    fun `ARGUS_SCHEMA_VERSION is 1`() {
+    fun `ARGUS_SCHEMA_VERSION is 2`() {
         // Guard: bumping this constant is a conscious wire-breaking change. Update
         // HelloPayload consumers and the web UI before changing this expectation.
-        assertEquals(1, ARGUS_SCHEMA_VERSION)
+        assertEquals(2, ARGUS_SCHEMA_VERSION)
     }
 }

@@ -62,6 +62,6 @@ class HelloPayloadSerializationTest {
         val decoded = Json.decodeFromString<HelloPayload>(legacy)
 
         assertEquals(null, decoded.appInfo)
-        assertEquals(ARGUS_SCHEMA_VERSION, decoded.schemaVersion)
+        assertEquals(1, decoded.schemaVersion)
     }
 }

@@ -14,4 +14,5 @@ public data class HttpEvent(
     val error: HttpError? = null,
     val durationMs: Long? = null,
     val correlationId: String? = null,
+    val engine: String = "ktor",
 ) : ArgusEvent

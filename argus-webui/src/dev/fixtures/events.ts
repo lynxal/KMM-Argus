@@ -82,6 +82,7 @@ function http(
     id: `evt_${id}`,
     timestamp: ts(offset),
     source: 'HTTP',
+    engine: 'ktor',
     durationMs: duration,
     request: {
       method,

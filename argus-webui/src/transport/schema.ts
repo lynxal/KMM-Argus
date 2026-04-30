@@ -6,7 +6,7 @@
  * @see argus-core/src/commonMain/kotlin/com/lynxal/argus/model/ArgusEvent.kt
  * @see argus-core/src/commonMain/kotlin/com/lynxal/argus/model/Schema.kt
  */
-export const ARGUS_SCHEMA_VERSION = 1 as const;
+export const ARGUS_SCHEMA_VERSION = 2 as const;
 
 export type EventSource = 'HTTP' | 'LOG' | 'CUSTOM';
 export type Direction = 'INBOUND' | 'OUTBOUND' | 'NONE';
@@ -67,6 +67,8 @@ export interface HttpEvent {
   /** Phase 2: ArgusCorrelationId stamped at request time. Absent for traffic emitted
    *  outside any `withCorrelation { ... }` scope. */
   correlationId?: string | null;
+  /** Phase 3: HTTP engine that produced this event ("ktor", "okhttp", "urlconnection"). */
+  engine: string;
 }
 
 export interface LogEvent {

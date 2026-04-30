@@ -8,6 +8,7 @@ function http(id: string, method: string, status: number, host: string, path: st
     id,
     timestamp: 0,
     source: 'HTTP',
+    engine: 'ktor',
     request: { method, url: `https://${host}${path}`, host, path, headers: [] },
     response: { statusCode: status, statusText: '', headers: [] },
     error: null,
