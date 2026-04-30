@@ -211,4 +211,34 @@ class ArgusHttpURLConnectionTest {
         assertNotNull(event)
         assertNull(event.response)
     }
+
+    @Test
+    fun `disconnect before close emits captured prefix instead of empty body`() {
+        val bus = RecordingBus()
+        val payload = "abcdefghij".repeat(200) // 2000 bytes
+        server.enqueue(
+            MockResponse()
+                .setBody(payload)
+                .setHeader("Content-Type", "text/plain"),
+        )
+
+        val raw = open(server.url("/partial").toUrl())
+        val conn = ArgusUrlConnection.wrap(raw, bus)
+        try {
+            assertEquals(200, conn.responseCode)
+            // Read part of the response, then call disconnect() WITHOUT close().
+            val stream = conn.inputStream
+            val buf = ByteArray(64)
+            val n = stream.read(buf)
+            assertTrue(n > 0)
+        } finally {
+            conn.disconnect()
+        }
+
+        val event = bus.events.single() as HttpEvent
+        val preview = event.response?.bodyPreview
+        assertNotNull(preview)
+        assertTrue(preview.isNotEmpty(), "expected non-empty captured prefix from partial read")
+        assertTrue(payload.startsWith(preview), "captured prefix must be a prefix of the real body")
+    }
 }

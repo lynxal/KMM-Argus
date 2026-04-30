@@ -8,7 +8,7 @@ export interface CustomTabsProps {
   readonly active: string;
 }
 
-/** Phase 3 scaffold — deliberately minimal. */
+/** Deliberately minimal. */
 export function createCustomTabs({ event, active }: CustomTabsProps): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'h-full overflow-auto p-3 flex flex-col gap-3';

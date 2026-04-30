@@ -178,7 +178,7 @@ function createEngineChip(engine: string): HTMLElement {
   const span = document.createElement('span');
   const label = ENGINE_LABELS[engine] ?? engine.toUpperCase();
   const tone = ENGINE_TONES[engine] ?? 'text-fg-3 border-border-default';
-  span.className = `inline-flex items-center px-1 h-4 rounded-xs border text-[10px] font-mono leading-none ${tone}`;
+  span.className = `inline-flex items-center px-1 h-4 rounded-xs border text-xxs font-mono leading-none ${tone}`;
   span.textContent = label;
   span.title = `engine: ${engine}`;
   return span;

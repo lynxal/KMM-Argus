@@ -1,6 +1,8 @@
 # Argus
 
-In-app debug tooling for Kotlin Multiplatform apps. Argus runs an embedded Ktor server inside debug builds and serves a desktop-class web UI on the local network — open any browser on the same Wi-Fi and inspect HTTP traffic, application logs, and custom events on a single unified timeline. Built Ktor-first (no OkHttp shim), KMP-ready, and engineered so release builds contain zero Argus classes by construction.
+**Argus** takes its name from Argus Panoptes — the hundred-eyed giant of Greek myth, set by Hera to watch over Io. The library shares the job description: see everything the app does, miss nothing.
+
+In practice, that means: in-app debug tooling for Kotlin Multiplatform apps. Argus runs an embedded Ktor server inside debug builds and serves a desktop-class web UI on the local network — open any browser on the same Wi-Fi and inspect HTTP traffic, application logs, and custom events on a single unified timeline. Built Ktor-first (no OkHttp shim), KMP-ready, and engineered so release builds contain zero Argus classes by construction.
 
 ![Argus inspecting :sample traffic](docs/ui/hero.png)
 
@@ -67,6 +69,23 @@ interface DebugTools {
     fun buildHttpClient(): HttpClient
     fun installLogging()
     fun observeArgusUrl(): StateFlow<String?>
+
+    /** Emit a CustomEvent through the sample's bus. No-op in release. */
+    fun publishCustom(source: String, label: String, payload: String)
+
+    /** Fire an OkHttp request through Argus's interceptor. No-op in release. */
+    fun fireOkHttpCall(url: String)
+
+    /** Fire an HttpURLConnection request wrapped by Argus. No-op in release. */
+    fun fireUrlConnectionCall(url: String)
+
+    /**
+     * Fire two HTTP calls back-to-back inside one ArgusCorrelationId scope so the
+     * resulting events share a correlation id. Lives behind the debug seam because
+     * ArgusCorrelationId is in `:argus-core`, which release variants must not link.
+     * No-op in release.
+     */
+    fun fireCorrelatedPair(first: String, second: String)
 }
 ```
 
@@ -82,15 +101,31 @@ package com.lynxal.argus.sample.debug
 import android.app.Application
 import com.lynxal.argus.android.Argus
 import com.lynxal.argus.android.ArgusHandle
+import com.lynxal.argus.correlation.withCorrelation
 import com.lynxal.argus.logging.ArgusLoggerDelegate
+import com.lynxal.argus.model.Direction
+import com.lynxal.argus.model.publishCustom
+import com.lynxal.argus.okhttp.ArgusOkHttpConfig
+import com.lynxal.argus.okhttp.ArgusOkHttpInterceptor
+import com.lynxal.argus.urlconnection.ArgusUrlConnection
+import com.lynxal.argus.urlconnection.ArgusUrlConnectionConfig
 import com.lynxal.logging.DebugLoggerImplementation
 import com.lynxal.logging.LogLevel
 import com.lynxal.logging.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
 import io.ktor.serialization.kotlinx.json.json
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import com.lynxal.argus.ktor.Argus as ArgusPlugin
 
 class DebugToolsImpl(private val app: Application) : DebugTools {
@@ -99,15 +134,32 @@ class DebugToolsImpl(private val app: Application) : DebugTools {
         maxBodyBytes = 262_144L
     }
 
-    override fun buildHttpClient(): HttpClient = HttpClient(CIO) {
-        install(ArgusPlugin) {
-            eventBus = argus.eventBus
-            maxBodyBytes = 262_144L
-        }
-        install(ContentNegotiation) {
-            json()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(
+                ArgusOkHttpInterceptor(
+                    argus.eventBus,
+                    ArgusOkHttpConfig().apply { maxBodyBytes = 262_144L },
+                ),
+            )
+            .build()
+    }
+
+    private val ktorClient: HttpClient by lazy {
+        HttpClient(CIO) {
+            install(ArgusPlugin) {
+                eventBus = argus.eventBus
+                maxBodyBytes = 262_144L
+            }
+            install(ContentNegotiation) {
+                json()
+            }
         }
     }
+
+    override fun buildHttpClient(): HttpClient = ktorClient
 
     override fun installLogging() {
         Logger.minLevel = LogLevel.Verbose
@@ -116,6 +168,54 @@ class DebugToolsImpl(private val app: Application) : DebugTools {
     }
 
     override fun observeArgusUrl(): StateFlow<String?> = argus.url
+
+    override fun publishCustom(source: String, label: String, payload: String) {
+        argus.eventBus.publishCustom(
+            source = source,
+            label = label,
+            direction = Direction.NONE,
+            payload = payload,
+        )
+    }
+
+    override fun fireOkHttpCall(url: String) {
+        ioScope.launch {
+            runCatching {
+                okHttpClient.newCall(Request.Builder().url(url).build()).execute().use {
+                    it.body?.string()
+                }
+            }
+        }
+    }
+
+    override fun fireUrlConnectionCall(url: String) {
+        ioScope.launch {
+            runCatching {
+                val raw = URL(url).openConnection() as HttpURLConnection
+                val cfg = ArgusUrlConnectionConfig().apply { maxBodyBytes = 262_144L }
+                val conn = ArgusUrlConnection.wrap(raw, argus.eventBus, cfg)
+                try {
+                    conn.connect()
+                    conn.inputStream.use { it.readBytes() }
+                } finally {
+                    conn.disconnect()
+                }
+            }
+        }
+    }
+
+    override fun fireCorrelatedPair(first: String, second: String) {
+        ioScope.launch {
+            withCorrelation {
+                val logger = Logger.tag("Argus sample")
+                logger.info { message = "correlated-pair: starting" }
+                runCatching { ktorClient.get(first) }
+                logger.info { message = "correlated-pair: first done, firing second" }
+                runCatching { ktorClient.get(second) }
+                logger.info { message = "correlated-pair: done" }
+            }
+        }
+    }
 }
 ```
 
@@ -156,6 +256,22 @@ class DebugToolsImpl(@Suppress("unused") private val app: Application) : DebugTo
     }
 
     override fun observeArgusUrl(): StateFlow<String?> = empty
+
+    override fun publishCustom(source: String, label: String, payload: String) {
+        // no-op in release
+    }
+
+    override fun fireOkHttpCall(url: String) {
+        // no-op in release
+    }
+
+    override fun fireUrlConnectionCall(url: String) {
+        // no-op in release
+    }
+
+    override fun fireCorrelatedPair(first: String, second: String) {
+        // no-op in release
+    }
 }
 ```
 
@@ -198,6 +314,26 @@ The iOS seam works the same way as Android (interface in shared code, real impl 
 
 > [!IMPORTANT]
 > Argus iOS captures Ktor `HttpClient` traffic only. URLSession / Alamofire / native networking interception is **not** supported — your iOS app must use Ktor for HTTP if you want it on the timeline.
+
+### Alternative — pure Swift / Xcode-only apps via Swift Package Manager
+
+If your iOS app does **not** use Kotlin Multiplatform, consume Argus as an XCFramework via SPM:
+
+1. In Xcode: **File → Add Packages…** and enter `https://github.com/lynxal/argus`.
+2. Select **Up to next major version** and add the `ArgusIOS` library to your debug app target.
+3. SPM has no native build-config gating, so the binary is the same in debug and release. Wrap your usage in `#if DEBUG` (or split debug/release schemes) so the released app does not link Argus:
+
+```swift
+#if DEBUG
+import ArgusIOS
+
+let handle = Argus.shared.start { config in
+    config.port = 8787
+}
+#endif
+```
+
+The XCFramework is built by Gradle (`./gradlew :argus-ios:assembleArgus-iosReleaseXCFramework`) and published as a release asset on each Argus release. KMP-based apps should keep using `implementation("com.lynxal.argus:argus-ios:0.0.1")` from Maven Central — the steps below describe that path.
 
 ### Step 1 — Add iOS targets to your KMP module + Xcode build-phase script
 
@@ -254,14 +390,26 @@ The interface defined in §4 Step 2 lives in `commonMain/` and works for both An
 ```kotlin
 package com.lynxal.argus.sample.debug
 
+import com.lynxal.argus.correlation.withCorrelation
 import com.lynxal.argus.ios.Argus
 import com.lynxal.argus.ios.ArgusHandle
 import com.lynxal.argus.logging.ArgusLoggerDelegate
+import com.lynxal.argus.model.Direction
+import com.lynxal.argus.model.publishCustom
 import com.lynxal.logging.DebugLoggerImplementation
 import com.lynxal.logging.LogLevel
 import com.lynxal.logging.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import com.lynxal.argus.ktor.Argus as ArgusPlugin
 
 class DebugToolsImpl : DebugTools {
@@ -269,13 +417,21 @@ class DebugToolsImpl : DebugTools {
         port = 8787
         maxBodyBytes = 262_144L
     }
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun buildHttpClient() = HttpClient(Darwin) {
-        install(ArgusPlugin) {
-            eventBus = argus.eventBus
-            maxBodyBytes = 262_144L
+    private val ktorClient: HttpClient by lazy {
+        HttpClient(Darwin) {
+            install(ArgusPlugin) {
+                eventBus = argus.eventBus
+                maxBodyBytes = 262_144L
+            }
+            install(ContentNegotiation) {
+                json()
+            }
         }
     }
+
+    override fun buildHttpClient(): HttpClient = ktorClient
 
     override fun installLogging() {
         Logger.minLevel = LogLevel.Verbose
@@ -283,10 +439,37 @@ class DebugToolsImpl : DebugTools {
         Logger.add(ArgusLoggerDelegate(argus.eventBus))
     }
 
-    override fun observeArgusUrl() = argus.url
-    override fun fireOkHttpCall(url: String) { /* JVM-only */ }
-    override fun fireUrlConnectionCall(url: String) { /* JVM-only */ }
-    // …publishCustom and fireCorrelatedPair omitted; see :sample
+    override fun observeArgusUrl(): StateFlow<String?> = argus.url
+
+    override fun publishCustom(source: String, label: String, payload: String) {
+        argus.eventBus.publishCustom(
+            source = source,
+            label = label,
+            direction = Direction.NONE,
+            payload = payload,
+        )
+    }
+
+    override fun fireOkHttpCall(url: String) {
+        // OkHttp engine is JVM-only; no iOS counterpart.
+    }
+
+    override fun fireUrlConnectionCall(url: String) {
+        // HttpURLConnection is JVM-only; no iOS counterpart.
+    }
+
+    override fun fireCorrelatedPair(first: String, second: String) {
+        ioScope.launch {
+            withCorrelation {
+                val logger = Logger.tag("Argus sample")
+                logger.info { message = "correlated-pair: starting" }
+                runCatching { ktorClient.get(first) }
+                logger.info { message = "correlated-pair: first done, firing second" }
+                runCatching { ktorClient.get(second) }
+                logger.info { message = "correlated-pair: done" }
+            }
+        }
+    }
 }
 ```
 
@@ -435,7 +618,9 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 
 ## 9. Configuration reference
 
-`Argus.start()` takes a builder block. All options have sensible defaults:
+Argus has two config surfaces: **server-side** (`Argus.start { ... }`) for the inspector server, and **client-side** (per-engine capture plugins) for what gets recorded.
+
+### 9.1 Server-side — `Argus.start()`
 
 | Option | Default | Description |
 |---|---|---|
@@ -443,7 +628,10 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 | `maxEvents` | `500` | Ring-buffer size. Older events are dropped beyond this. |
 | `maxBodyBytes` | `1_000_000` (1 MB) | Per-body capture cap. Bodies larger than this are truncated. |
 | `redactHeaders` | `["Authorization", "Cookie", "Set-Cookie", "Proxy-Authorization"]` | HTTP header names whose values are replaced with `***redacted***` before capture. |
-| `corsDevOrigins` | `["http://localhost:5173"]` | Extra CORS origins for the dev web UI. The bundled production UI is served same-origin and needs no entry here. |
+| `corsDevOrigins` | `["http://localhost:5173"]` | Extra CORS origins for the dev web UI. The bundled production UI is served same-origin and needs no entry here. Set to `emptyList()` in any non-debug context to skip the CORS plugin install. |
+| `persist` | `false` | Persist events to disk so they survive process restarts. On next `Argus.start()`, the previous session's events are restored into the in-memory ring (capped at `maxEvents`). The UI does not surface older sessions — `persist` keeps the timeline alive across restarts, not a full archive. |
+| `persistMaxSizeMb` | `100` | Soft cap on on-disk payload size (MB). Whichever fires first with `persistMaxAgeDays` prunes the oldest persisted events. |
+| `persistMaxAgeDays` | `7` | Soft cap on persisted-event age (days). Whichever fires first with `persistMaxSizeMb`. |
 
 Example (from `:sample`):
 
@@ -453,6 +641,19 @@ Argus.start(application) {
     maxBodyBytes = 262_144L  // 256 KB
 }
 ```
+
+### 9.2 Client-side — capture plugins
+
+These options live on each engine's plugin/interceptor config: Ktor `install(ArgusPlugin) { ... }`, OkHttp `ArgusInterceptor`'s `ArgusOkHttpConfig`, and HttpURLConnection's `ArgusUrlConnectionConfig`. The Ktor shape is shown; the others mirror it field-for-field.
+
+| Option | Default | Description |
+|---|---|---|
+| `eventBus` | `NoopEventBus` | Sink for captured events. Set to `argusHandle.eventBus` so captures land in the inspector. |
+| `maxBodyBytes` | `1_000_000` (1 MB) | Per-body capture cap. Bodies larger than this are truncated. |
+| `redactHeaders` | (same default set as server) | Headers whose values are replaced with `***redacted***` before capture. |
+| `captureRequestBody` | `true` | Capture request bodies. Set to `false` to record only metadata. |
+| `captureResponseBody` | `true` | Capture response bodies. Set to `false` to record only metadata. |
+| `fullBodyHosts` | `emptySet()` | Hosts whose bodies bypass `maxBodyBytes` and are captured in full. Case-insensitive on URL host (no port, no scheme). Practical ceiling per body is ~2 GB (`Int.MAX_VALUE`) because captures are held in a single `ByteArray`; larger payloads are truncated and the event reports `truncatedTotalBytes`. Use sparingly. |
 
 ## 10. Sample apps
 
@@ -483,14 +684,24 @@ Both gates run as part of `:sample:check`. Run them locally any time you change 
 flowchart LR
     consumer["consumer app<br/>(debug variant)"]
     android["argus-android<br/><i>Android entry point</i>"]
+    ios["argus-ios<br/><i>iOS entry point</i>"]
     server["argus-server-core<br/><i>Embedded Ktor server</i>"]
     bundle["argus-webui-bundle<br/><i>Pre-built SPA (resource)</i>"]
     core["argus-core<br/><i>Event model + Ktor capture plugin</i>"]
-    webui["argus-webui<br/><i>React UI source (build-time)</i>"]
+    okhttp["argus-okhttp<br/><i>OkHttp interceptor</i>"]
+    urlconn["argus-urlconnection<br/><i>HttpURLConnection wrapper</i>"]
+    webui["argus-webui<br/><i>UI source (build-time)</i>"]
 
     consumer --> android
+    consumer --> ios
+    consumer -.-> okhttp
+    consumer -.-> urlconn
     android --> server
+    ios --> server
     android --> core
+    ios --> core
+    okhttp --> core
+    urlconn --> core
     server --> core
     server -. bundles .- bundle
     webui -. compiled into .- bundle
@@ -500,8 +711,11 @@ flowchart LR
 |---|---|---|
 | `argus-core` | `com.lynxal.argus:argus-core:0.0.1` | Shared model, `ArgusClientPlugin` (Ktor capture), event bus, redaction. |
 | `argus-server-core` | `com.lynxal.argus:argus-server-core:0.0.1` | Embedded Ktor server: REST + WebSocket endpoints, event dispatcher, `ArgusConfig`. |
-| `argus-webui-bundle` | `com.lynxal.argus:argus-webui-bundle:0.0.1` | Pre-built React SPA shipped as a JVM resource the server statically serves. |
+| `argus-webui-bundle` | `com.lynxal.argus:argus-webui-bundle:0.0.1` | Pre-built SPA shipped as a JVM resource the server statically serves. |
 | `argus-android` | `com.lynxal.argus:argus-android:0.0.1` | Android entry point: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. |
+| `argus-ios` | `com.lynxal.argus:argus-ios:0.0.1` | iOS entry point for Apple targets: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. Also published as an XCFramework via Swift Package Manager (see §5). |
+| `argus-okhttp` | `com.lynxal.argus:argus-okhttp:0.0.1` | OkHttp `Interceptor` capture for non-Ktor JVM HTTP. |
+| `argus-urlconnection` | `com.lynxal.argus:argus-urlconnection:0.0.1` | `HttpURLConnection` capture wrapper for legacy JVM HTTP. |
 
 **Why debug-only?** See [§3](#3-debug-only-distribution-model). The summary: the embedded server is a production-grade attack surface, and the seam-pattern source-set split (with the `verifyReleaseHasNoArgus` CI gate) is the only integration shape we support. There is no no-op artifact, by design — a missing release-side `DebugToolsImpl` is a build error, which is the desired failure mode.
 

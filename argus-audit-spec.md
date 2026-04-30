@@ -51,12 +51,12 @@ These constraints define the system. Violating any of them is a failure of the i
 
 ### 3.3 KMP-first capture, platform-thin shells
 - All capture-side code (Ktor client plugin, KMMLogging delegate, event model, event bus interface) lives in `:argus-core`'s `commonMain` and runs unchanged on JVM, Android, and iOS targets.
-- Server routing, ring buffer, and query/filter logic live in `:argus-server-core`'s `commonMain`. Only platform binding and lifecycle are platform-specific (`expect class ArgusServer`).
+- Server routing, ring buffer, and query/filter logic live in `:argus-server-core`'s `commonMain`. Ktor's CIO engine is multiplatform (JVM, Android, iOS), so `ArgusServer` itself lives in `commonMain` as a plain class — no `expect/actual` split is needed for binding or lifecycle.
 - Web UI bundle is generated as KMP byte-array constants (`:argus-webui-bundle`) so both Android and iOS server modules serve identical assets.
 
 ### 3.4 Ktor client first
 - The MVP HTTP capture path is via a Ktor `HttpClient` plugin (`createClientPlugin`).
-- OkHttp, HttpURLConnection, Retrofit are explicitly Phase 3 — they bridge to the same `ArgusEventBus` contract.
+- OkHttp and HttpURLConnection support ship as separate engine modules (`:argus-okhttp`, `:argus-urlconnection`) that bridge to the same `ArgusEventBus` contract; Retrofit is consumed transparently by reusing those engines.
 - No reflection, no agent-based bytecode rewriting, no per-engine adapters in the MVP.
 
 ### 3.5 KMMLogging integration as the v1 log source
@@ -79,9 +79,8 @@ These constraints define the system. Violating any of them is a failure of the i
 - No `_argus._tcp` advertisement, no Lantern integration, no `NetworkCallback` for service re-registration.
 
 ### 3.9 Design before implementation
-- The web UI implementation depends on design artifacts produced via Claude Design before any implementation begins.
-- Required artifacts under `docs/design/`: mockups for every screen state, `tokens.json`, per-component specs with all interaction states, interaction notes including keyboard shortcuts, single-page design system overview.
-- The UI implementation must derive its Tailwind theme directly from `tokens.json`. No hand-picked colors or spacing values are permitted in the codebase.
+- The web UI implementation in `argus-webui/` derives from design artifacts in `design_handoff_argus_inspector/`, the design source of truth (JSX prototypes per component, CSS token export, handoff README).
+- The implementation consumes these: `argus-webui/src/design/tokens.json` mirrors the handoff tokens, and Tailwind config is generated from `tokens.json`. No hand-picked colors or spacing values are permitted in the implementation.
 
 ### 3.10 Bundle and footprint budgets
 - Web UI: total gzipped bundle < 100 KB.
@@ -104,21 +103,21 @@ argus-webui-bundle (KMP: jvm, android, ios)
     └─ Gradle task generates byte-array constants from argus-webui/dist/
 
 argus-server-core (KMP: jvm, android, ios)
-    └─ Ktor routing, ring buffer, query/filter, expect class ArgusServer
+    └─ Ktor routing, ring buffer, query/filter, ArgusServer (commonMain plain class — CIO is multiplatform)
     └─ Depends on: argus-core, argus-webui-bundle
 
 argus-android (Android-only)
-    └─ actual class ArgusServer (Ktor CIO engine), public entry point
+    └─ Public entry point (Argus.start, ArgusHandle); SQLDelight Android driver factory
     └─ Depends on: argus-server-core
     └─ NO dependency on Lantern (mDNS dropped)
 
-argus-ios (iOS-only, Phase 4)
-    └─ actual class ArgusServer (Ktor server, Darwin/NIO engine)
+argus-ios (iOS-only)
+    └─ Public entry point (Argus.start, ArgusHandle); SQLDelight Native driver factory
     └─ Depends on: argus-server-core
 
-sample-android (Android application)
+sample (KMP application: Android + iOS)
     └─ Reference integration; CI target for the zero-Argus-classes check
-    └─ Depends on: argus-android (debugImplementation only)
+    └─ Depends on: argus-android (debugImplementation only) and argus-ios (iosArgusEnabled source set only)
 ```
 
 Dependency direction is strict and downward only. No reverse dependencies.
@@ -146,7 +145,7 @@ Dependency direction is strict and downward only. No reverse dependencies.
 - Respects `LogLevel` minimum filter before constructing `LogEvent`.
 
 ### 5.3 Event model
-- Sealed `ArgusEvent` interface with `HttpEvent`, `LogEvent`, `CustomEvent` (CustomEvent scaffolded for Phase 3).
+- Sealed `ArgusEvent` interface with `HttpEvent`, `LogEvent`, `CustomEvent`.
 - All types `@Serializable` via kotlinx.serialization, round-tripping cleanly on JVM and native.
 - `EventSource` enum: `HTTP`, `LOG`, `CUSTOM`.
 - Schema version constant `ARGUS_SCHEMA_VERSION` exposed; included in WS hello payload.
@@ -188,14 +187,14 @@ Auth: none in v1. The README must document the LAN-exposure risk.
 - Filter bar: source multi-select, HTTP-specific (method, status class), Log-specific (level, tag), universal host search and URL/message contains search with match highlighting
 - Event detail — HTTP: tabs Headers | Request | Response | Timing | Related Logs | Raw; Copy as cURL action
 - Event detail — LOG: tabs Message | Payload | Stack Trace | Raw
-- Event detail — CUSTOM: tabs Payload | Metadata | Raw (Phase 3 scaffold; renders correctly when fed sample CustomEvents)
+- Event detail — CUSTOM: tabs Payload | Metadata | Raw
 - Body viewer states: JSON tree, plain text, image preview, hex view, empty, truncated banner
-- Waterfall view: shared time axis, HTTP bars colored by status class, Log/Custom tick marks, hover tooltip, click-to-select, zoom and pan
+- Waterfall view: shared time axis, HTTP bars rendered as illustrative Connect/Wait/Download segments (status-class-tinted, fixed weights — they convey duration and status, not real phase timings), Log/Custom tick marks, hover tooltip, click-to-select, zoom and pan
 - Split view: list and waterfall stacked with synchronized selection
 - Empty states: no events yet, no events match filters, nothing selected
 - Connection states: connected, reconnecting, disconnected
 - Dark mode: system-follow default with explicit toggle override
-- Keyboard shortcuts: `?` (help), `/` (search focus), `f` (filters), `j`/`k` (selection move), `x` (clear with confirm), `p` (pause toggle), `w` (cycle list/waterfall/split), `[`/`]` (cycle detail tabs), `Esc` (close detail/help)
+- Keyboard shortcuts: `?` (help), `/` (search focus), `f` (filters), `j`/`k` (selection move), `x` (clear filters), `Shift+X` (clear events with toast + ⌘Z undo), `p` (pause toggle), `w` (cycle list/waterfall/split), `[`/`]` (cycle detail tabs), `Esc` (close detail/help)
 - Filters apply client-side, instantly
 - Search with highlight
 
@@ -207,15 +206,14 @@ Auth: none in v1. The README must document the LAN-exposure risk.
 - Breakpoints
 - WebSocket frame inspection (the inspected app's outbound WS frames)
 - Multi-device in a single browser tab (each tab inspects one device)
-- Persistence across app restarts
 - Full-body download for truncated bodies
-- Phased waterfall (DNS / Connect / TLS / Send / Wait / Receive breakdown)
+- Real-phase waterfall driven by actual transport timings (DNS / Connect / TLS / Send / Wait / Receive). The MVP renders illustrative Connect/Wait/Download segments with fixed weights for visual structure — that is permitted.
 - Exact request/log correlation (replaced by time-window heuristic in MVP)
 - mDNS / Bonjour discovery
 - QR codes for device URL
 
 ### 5.8 Sample app
-- `:sample-android` is a runnable Android application module included in the repository.
+- `:sample` is a runnable Android application module included in the repository.
 - Provides buttons for: `GET /users/1` (small JSON), `GET /posts` (larger JSON list), `GET image` (binary), `GET failing host` (network error), and one button per KMMLogging level emitting a log with payload (the ERROR button includes a synthetic throwable chain).
 - The sample app's UI displays the Argus listening URL (`http://<host>:<port>`) on start.
 - Logcat prints `Argus listening on http://<host>:<port>` at INFO level on server start.
@@ -236,9 +234,9 @@ The reviewer validates each item below against the delivered codebase. Each item
 ### 6.1 Architectural compliance
 - [ ] No module under `:argus-*` depends on `:lantern-android` or any other mDNS library
 - [ ] `:argus-core` `commonMain` compiles for jvm, android, and ios targets
-- [ ] `:argus-server-core` `commonMain` contains the routing logic; `expect class ArgusServer` is used for binding
+- [ ] `:argus-server-core` `commonMain` contains the routing logic and `ArgusServer` itself (plain class — Ktor CIO is multiplatform, so no `expect/actual` split is required)
 - [ ] No CDP (Chrome DevTools Protocol) types, message names, or domains appear in the codebase
-- [ ] The web UI is custom-built from `docs/design/` artifacts; `devtools-frontend` is not vendored
+- [ ] The web UI is custom-built from `design_handoff_argus_inspector/` artifacts; `devtools-frontend` is not vendored
 - [ ] `:argus-webui-bundle` generates byte-array constants and is consumed by `:argus-server-core`
 - [ ] No no-op module exists in the repository
 
@@ -253,11 +251,11 @@ The reviewer validates each item below against the delivered codebase. Each item
 - [ ] `NoopEventBus` is the default; plugin and delegate compile and run with no observable side effects when no real bus is wired
 
 ### 6.3 Distribution and CI
-- [ ] `:sample-android` `app/build.gradle.kts` shows `debugImplementation` only (no `implementation` or `releaseImplementation` of any Argus artifact)
+- [ ] `:sample` `app/build.gradle.kts` shows `debugImplementation` only (no `implementation` or `releaseImplementation` of any Argus artifact)
 - [ ] `src/main/` of the sample app contains the `DebugTools` interface with no Argus imports
 - [ ] `src/debug/` of the sample app contains a `DebugToolsImpl` that installs the Ktor plugin and KMMLogging delegate
 - [ ] `src/release/` of the sample app contains a `DebugToolsImpl` with zero Argus imports
-- [ ] `./gradlew :sample-android:assembleRelease` succeeds
+- [ ] `./gradlew :sample:assembleRelease` succeeds
 - [ ] `apkanalyzer dex packages` of the release APK produces no `com.lynxal.argus.*` matches
 - [ ] CI pipeline includes a `verifyReleaseHasNoArgus` step that fails if Argus classes appear in the release APK
 
@@ -278,14 +276,14 @@ The reviewer validates each item below against the delivered codebase. Each item
 - [ ] Sustained 500 req/s + 500 log/s combined produces no drops in a benchmark on a mid-tier Android device
 
 ### 6.6 Web UI compliance with design
-- [ ] `docs/design/` contains all required artifacts (mockups, `tokens.json`, component specs, interaction notes, overview)
-- [ ] `tailwind.config.ts` is generated or hand-mirrored from `tokens.json` with no extra hand-picked values
+- [ ] Design artifacts are present at `design_handoff_argus_inspector/` (JSX prototypes, CSS token export, handoff README)
+- [ ] `tailwind.config.ts` is generated or hand-mirrored from `argus-webui/src/design/tokens.json` with no extra hand-picked values
 - [ ] Searching the codebase for hex color literals or px values outside of the Tailwind config returns zero matches
-- [ ] Every component listed in `docs/design/components/` has a corresponding implementation under `src/components/`
-- [ ] Every screen state from `docs/design/mockups/` renders correctly in the running app
+- [ ] Every component listed in `design_handoff_argus_inspector/argus/*.jsx` has a corresponding implementation under `argus-webui/src/components/`
+- [ ] Every screen state from the JSX prototypes renders correctly in the running app
 - [ ] Empty, loading, and error states are implemented for every view that can produce them
-- [ ] Keyboard shortcuts behave exactly as specified in `docs/design/interactions.md`
-- [ ] `prefers-reduced-motion` is respected; transition durations match interactions.md
+- [ ] Keyboard shortcuts behave per the README walkthrough and the implementation in `argus-webui/src/keyboard/`
+- [ ] `prefers-reduced-motion` is respected; transition durations come from `tokens.json`
 
 ### 6.7 Web UI runtime quality
 - [ ] Production gzipped bundle size is under 100 KB
@@ -297,7 +295,7 @@ The reviewer validates each item below against the delivered codebase. Each item
 - [ ] No external network requests at runtime (verified by browser DevTools network tab — only requests should be to the device's own server)
 
 ### 6.8 Sample app
-- [ ] App launches on emulator and a physical device with `./gradlew :sample-android:installDebug`
+- [ ] App launches on emulator and a physical device with `./gradlew :sample:installDebug`
 - [ ] Each GET button produces a captured event visible at `<host>:<port>` REST API
 - [ ] Failing-host button produces an event with `error` populated
 - [ ] Each log button produces a `LogEvent` at the corresponding level
@@ -311,7 +309,7 @@ The reviewer validates each item below against the delivered codebase. Each item
 - [ ] `README.md` exists at repo root
 - [ ] Section warning on debug-only distribution is rendered prominently (callout, banner, or visually distinct block)
 - [ ] Integration code samples in the README compile when copy-pasted into a fresh Android module (verify by replicating in a scratch project)
-- [ ] Code samples in the README match the actual contents of `:sample-android` (exact match or annotated divergence)
+- [ ] Code samples in the README match the actual contents of `:sample` (exact match or annotated divergence)
 - [ ] Troubleshooting section addresses the three named scenarios: cannot connect from desktop, release build broken, release APK contains Argus classes
 - [ ] Configuration reference covers all `ArgusConfig` options with defaults and effects
 
@@ -319,11 +317,11 @@ The reviewer validates each item below against the delivered codebase. Each item
 - [ ] No `TODO`, `FIXME`, or `HACK` markers in shipped code paths (test code may have annotated TODOs)
 - [ ] Public API has KDoc on all classes, properties, and functions
 - [ ] No unused imports, no commented-out code
-- [ ] Module-level `README.md` or KDoc package documentation describes each module's purpose
+- [ ] Modules are documented either by the root README §11 module table + KDoc on the public API, or by per-module READMEs — both are acceptable.
 - [ ] Test coverage:
   - `:argus-core` `commonTest` covers the Ktor plugin against `MockEngine` and the logger delegate against a fake bus
-  - `:argus-server-core` `commonTest` covers routing via Ktor's test client
-  - `:argus-android` includes at least a smoke test for `ArgusServer.start()` and `stop()`
+  - `:argus-server-core` `jvmTest` covers routing via Ktor's `testApplication` (Ktor's test host is JVM-only at the project's Ktor version; this matches `commonTest`'s expressivity for the routing surface since the routing code itself lives in `commonMain`)
+  - `:argus-android` and `:argus-ios` each include a smoke test for `Argus.start()` and `stop()`
 - [ ] No reflection used in capture paths (Ktor plugin and logger delegate)
 - [ ] No platform-specific code in `commonMain` of any KMP module
 - [ ] No `runBlocking` calls in production code paths
@@ -342,26 +340,9 @@ The reviewer validates each item below against the delivered codebase. Each item
 
 ---
 
-## 7. Phase boundaries
+## 7. Implementation status
 
-The reviewer validates that **only Phase 1 features** are present in the MVP delivery. Items below are explicitly out of MVP scope and should not appear:
-
-**Phase 2 (deferred):**
-- Correlation IDs via `CoroutineContext.Element`
-- Persistence via SQLDelight
-- Per-host full-body capture bypass
-
-**Phase 3 (deferred):**
-- `:argus-okhttp` module
-- `:argus-urlconnection` module
-- `ArgusEventBus.publishCustom(...)` public API for custom non-HTTP events
-- CustomEvent UI display logic (the schema is scaffolded; the active UI rendering is not)
-
-**Phase 4 (deferred):**
-- `:argus-ios` module
-- iOS sample app
-
-If the reviewer finds Phase 2/3/4 features partially or fully implemented, they should flag this — partial implementations of out-of-scope features carry maintenance cost without delivering value.
+All MVP scope (originally tracked across four phases) is shipped: HTTP capture (Ktor / OkHttp / HttpURLConnection), log capture, correlation IDs, persistence, per-host full-body bypass, custom events, the iOS module, and the unified sample app. This section was previously a phase-deferral list; it has been superseded by the implementation.
 
 ---
 
@@ -372,7 +353,7 @@ The reviewer is expected to produce:
 1. **Verification report** — pass/fail status for each item in section 6, with file/line references for failures.
 2. **Risk register** — any architectural drift, hidden coupling, or future-maintenance concerns observed during review.
 3. **Performance measurements** — actual numbers for the benchmarks called out in sections 6.5, 6.7, 6.11. These should be repeatable.
-4. **Design-spec adherence summary** — qualitative assessment of how closely the implemented UI matches `docs/design/` artifacts, with screenshots paired against mockups.
+4. **Design-spec adherence summary** — qualitative assessment of how closely the implemented UI matches the `design_handoff_argus_inspector/` JSX prototypes, with screenshots paired against the prototypes.
 5. **Recommendation** — overall: ship as-is, ship with minor corrections, or block on listed defects.
 
 ---
@@ -380,7 +361,7 @@ The reviewer is expected to produce:
 ## 9. Out-of-scope for this audit
 
 The reviewer is not expected to:
-- Validate Phase 2, 3, or 4 features (these are not in the MVP delivery)
+- Re-validate originally phased-out features now folded into the MVP — see §7
 - Audit the KMMLogging library itself (treated as a stable upstream dependency)
 - Audit the Ktor library
 - Validate Lynxal internal Maven repository configuration

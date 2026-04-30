@@ -2,11 +2,14 @@
 
 package com.lynxal.argus.ktor
 
+import com.lynxal.argus.capture.CaptureConfig
 import com.lynxal.argus.capture.CapturedBody
 import com.lynxal.argus.capture.CapturedRequest
 import com.lynxal.argus.capture.InternalArgusApi
+import com.lynxal.argus.capture.effectiveMaxBytesFor
 import com.lynxal.argus.capture.encodeCapturedBytes
 import com.lynxal.argus.correlation.ArgusCorrelationId
+import com.lynxal.argus.util.bestEffortFqn
 import com.lynxal.argus.model.ArgusEventBus
 import com.lynxal.argus.model.Header
 import com.lynxal.argus.model.HttpError
@@ -30,6 +33,22 @@ import kotlin.time.ExperimentalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+/**
+ * Ktor client plugin that captures every request/response pair into the configured
+ * [ArgusEventBus]. Install on your `HttpClient`:
+ *
+ * ```
+ * val client = HttpClient(CIO) {
+ *     install(Argus) {
+ *         eventBus = argusHandle.eventBus
+ *     }
+ * }
+ * ```
+ *
+ * Header redaction, body cap, per-host full-body bypass, and request/response capture
+ * toggles are configured via [ArgusClientConfig]. Streaming-safe via Ktor's
+ * `ByteReadChannel.split` — the original response channel is not consumed by capture.
+ */
 public val Argus: ClientPlugin<ArgusClientConfig> = createClientPlugin("Argus", ::ArgusClientConfig) {
     val cfg = pluginConfig
     val bus: ArgusEventBus = cfg.eventBus
@@ -48,7 +67,7 @@ public val Argus: ClientPlugin<ArgusClientConfig> = createClientPlugin("Argus", 
         val path = request.url.build().encodedPath.ifEmpty { "/" }
         val headers = request.headers.build().toArgusHeaders(cfg.redactHeaders)
 
-        val effectiveMaxBytes = effectiveMaxBytes(host, cfg)
+        val effectiveMaxBytes = effectiveMaxBytesFor(host, cfg.toCaptureConfig())
         request.attributes.put(ArgusMaxBodyBytesKey, effectiveMaxBytes)
 
         val reqBody: CapturedBody? = if (cfg.captureRequestBody) {
@@ -124,11 +143,13 @@ private fun KtorHttpResponse.contentTypeOrNull(): io.ktor.http.ContentType? {
     return runCatching { io.ktor.http.ContentType.parse(header) }.getOrNull()
 }
 
-private fun effectiveMaxBytes(host: String, cfg: ArgusClientConfig): Long {
-    if (cfg.fullBodyHosts.isEmpty()) return cfg.maxBodyBytes
-    val match = cfg.fullBodyHosts.any { it.equals(host, ignoreCase = true) }
-    return if (match) Long.MAX_VALUE else cfg.maxBodyBytes
-}
+internal fun ArgusClientConfig.toCaptureConfig(): CaptureConfig = CaptureConfig(
+    maxBodyBytes = maxBodyBytes,
+    fullBodyHosts = fullBodyHosts,
+    redactHeaders = redactHeaders,
+    captureRequestBody = captureRequestBody,
+    captureResponseBody = captureResponseBody,
+)
 
 private fun emitSuccess(
     bus: ArgusEventBus,
@@ -228,7 +249,7 @@ private fun emitNetworkError(
 }
 
 private fun Throwable.toHttpError(): HttpError = HttpError(
-    throwableClass = this::class.simpleName ?: this::class.toString(),
+    throwableClass = this::class.bestEffortFqn(),
     message = message,
     stackTrace = stackTraceToString(),
 )

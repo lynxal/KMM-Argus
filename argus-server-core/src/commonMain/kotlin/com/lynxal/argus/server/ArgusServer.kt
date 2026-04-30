@@ -21,8 +21,8 @@ import kotlin.concurrent.Volatile
  *
  * Persistence: pass a non-[NoopEventStore] [eventStore] together with a [sessionId]
  * (typically a fresh UUID per process) and the previous run's events as [seed] to
- * survive process restarts. Hosts that don't enable persistence keep the defaults
- * and behave identically to Phase 1.
+ * survive process restarts. Hosts that don't enable persistence keep the in-memory
+ * defaults.
  *
  * The Ktor CIO engine is multiplatform (JVM, Android, iOS), so the implementation
  * lives in `commonMain` with no expect/actual split.

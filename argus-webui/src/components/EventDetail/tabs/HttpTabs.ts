@@ -81,7 +81,7 @@ function renderOverview(event: HttpEvent): HTMLElement {
   method.className = 'font-mono text-fg-2';
   method.textContent = event.request.method.toUpperCase();
   const enginePill = document.createElement('span');
-  enginePill.className = 'inline-flex items-center px-1.5 h-5 rounded-xs border border-border-default text-[10px] font-mono leading-none text-fg-3 uppercase';
+  enginePill.className = 'inline-flex items-center px-1.5 h-5 rounded-xs border border-border-default text-xxs font-mono leading-none text-fg-3 uppercase';
   enginePill.textContent = event.engine;
   enginePill.title = `engine: ${event.engine}`;
   const path = document.createElement('span');
@@ -189,7 +189,7 @@ function legendItem(label: string, color: string): HTMLElement {
 }
 
 function renderRelatedLogs(event: HttpEvent, store: EventStore): HTMLElement {
-  const window = 500; // ± 500ms heuristic until Phase 2 correlation lands.
+  const window = 500; // ± 500ms heuristic as a fallback when correlationId is absent.
   const center = event.timestamp;
   const related = store.events.value.filter(
     (e) => isLogEvent(e) && Math.abs(e.timestamp - center) <= window,

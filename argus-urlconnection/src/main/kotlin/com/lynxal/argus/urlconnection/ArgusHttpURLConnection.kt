@@ -12,6 +12,7 @@ import com.lynxal.argus.model.Header as ArgusHeader
 import com.lynxal.argus.model.HttpError
 import com.lynxal.argus.model.HttpEvent
 import com.lynxal.argus.model.HttpResponse as ArgusHttpResponse
+import com.lynxal.argus.util.bestEffortFqn
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -42,6 +43,8 @@ internal class ArgusHttpURLConnection(
     private val effectiveMax: Long get() = effectiveMaxBytesFor(delegate.url.host, captureCfg)
 
     private var requestTee: TeeOutputStream? = null
+    private var responseTee: TeeInputStream? = null
+    private var errorTee: TeeInputStream? = null
     private val recordedRequestHeaders: MutableList<Pair<String, String>> = run {
         // Snapshot headers already set on the delegate before wrapping.
         val seed = mutableListOf<Pair<String, String>>()
@@ -169,17 +172,21 @@ internal class ArgusHttpURLConnection(
             // Even without body capture, ensure we emit at the end.
             return WrapEmittingStream(raw)
         }
-        return TeeInputStream(raw, effectiveMax) { bytes, total, _ ->
+        val tee = TeeInputStream(raw, effectiveMax) { bytes, total, _ ->
             emitSuccess(bodyBytes = bytes, totalRead = total)
         }
+        responseTee = tee
+        return tee
     }
 
     override fun getErrorStream(): InputStream? {
         val raw = delegate.errorStream ?: return null
         if (!config.captureResponseBody) return WrapEmittingStream(raw)
-        return TeeInputStream(raw, effectiveMax) { bytes, total, _ ->
+        val tee = TeeInputStream(raw, effectiveMax) { bytes, total, _ ->
             emitSuccess(bodyBytes = bytes, totalRead = total)
         }
+        errorTee = tee
+        return tee
     }
 
     /** Wraps a stream the user opted out of capturing for, but still emits on close. */
@@ -195,10 +202,12 @@ internal class ArgusHttpURLConnection(
 
     private fun emitIfNeeded() {
         if (emitted.get()) return
-        // Try to emit a success record with whatever data we have.
-        val tee = requestTee
+        // Drain whichever response-side tee captured bytes. Without this,
+        // disconnect()-before-close() paths would ship an empty body even when
+        // the consumer already read part of the response.
+        val tee = responseTee ?: errorTee
         if (tee != null) {
-            emitSuccess(bodyBytes = ByteArray(0), totalRead = 0L)
+            emitSuccess(bodyBytes = tee.capturedBytes, totalRead = tee.totalBytesRead)
         } else {
             emitSuccess(bodyBytes = ByteArray(0), totalRead = 0L)
         }
@@ -218,7 +227,7 @@ internal class ArgusHttpURLConnection(
                     request = request.toHttpRequest(),
                     response = null,
                     error = HttpError(
-                        throwableClass = "IOException",
+                        throwableClass = "java.io.IOException",
                         message = "response unavailable",
                         stackTrace = "",
                     ),
@@ -275,7 +284,7 @@ internal class ArgusHttpURLConnection(
                 request = request.toHttpRequest(),
                 response = null,
                 error = HttpError(
-                    throwableClass = throwable::class.simpleName ?: throwable::class.toString(),
+                    throwableClass = throwable::class.bestEffortFqn(),
                     message = throwable.message,
                     stackTrace = throwable.stackTraceToString(),
                 ),

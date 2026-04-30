@@ -9,6 +9,7 @@ package com.lynxal.argus.correlation
  * to read from on the call site, so they call this function instead.
  *
  * Backed by [CorrelationThreadLocal], which the [withCorrelation] helper populates on
- * JVM and Android. On iOS this returns `null` until `:argus-ios` lands in Phase 4.
+ * JVM and Android. On iOS, the thread-local backing returns `null` (no synchronous
+ * propagation); coroutine-aware callers should use [currentCorrelationId] instead.
  */
 public fun activeCorrelationId(): String? = CorrelationThreadLocal.get()

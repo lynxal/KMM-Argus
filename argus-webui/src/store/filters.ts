@@ -25,8 +25,8 @@ export interface Filters {
   tagQuery: string;
   textQuery: string;
   /**
-   * Phase 3: optional whitelist of CustomEvent.sourceLabel values. `null` means
-   * "no source-label restriction" — every CUSTOM event passes (subject to other
+   * Optional whitelist of CustomEvent.sourceLabel values. `null` means "no
+   * source-label restriction" — every CUSTOM event passes (subject to other
    * filters). A non-null Set restricts CUSTOM events to entries whose
    * sourceLabel is in the set.
    */

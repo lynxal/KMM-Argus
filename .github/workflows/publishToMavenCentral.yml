@@ -1,7 +1,7 @@
 name: Publish to Maven Central
 
 permissions:
-  contents: read
+  contents: write
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
 
   publish:
     needs: build-release
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: Release
 
     strategy:
@@ -52,3 +52,35 @@ jobs:
 
         with:
           arguments: ${{ matrix.target }}
+
+      - name: Build argus-ios XCFramework
+        if: github.event_name == 'release'
+        uses: gradle/gradle-build-action@v3
+        with:
+          arguments: ":argus-ios:assembleArgus-iosReleaseXCFramework"
+
+      - name: Zip XCFramework + compute SHA-256
+        if: github.event_name == 'release'
+        id: xcf
+        run: |
+          set -euo pipefail
+          XCF_DIR="argus-ios/build/XCFrameworks/release/argus_ios.xcframework"
+          ZIP_PATH="argus_ios.xcframework.zip"
+          (cd "$(dirname "$XCF_DIR")" && zip -r "../../../../$ZIP_PATH" "$(basename "$XCF_DIR")")
+          CHECKSUM=$(swift package compute-checksum "$ZIP_PATH")
+          echo "Checksum (paste into Package.swift binaryTarget): $CHECKSUM"
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload XCFramework to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.xcf.outputs.zip_path }}
+          fail_on_unmatched_files: true
+          body: |
+            ## SPM consumers
+            Update `Package.swift` `binaryTarget`:
+            - URL: `https://github.com/lynxal/argus/releases/download/${{ github.event.release.tag_name }}/argus_ios.xcframework.zip`
+            - Checksum: `${{ steps.xcf.outputs.checksum }}`
+          append_body: true

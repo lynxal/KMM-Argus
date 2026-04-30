@@ -8,13 +8,13 @@ interface DebugTools {
     fun installLogging()
     fun observeArgusUrl(): StateFlow<String?>
 
-    /** Phase 3: emit a CustomEvent through the sample's bus. No-op in release. */
+    /** Emit a CustomEvent through the sample's bus. No-op in release. */
     fun publishCustom(source: String, label: String, payload: String)
 
-    /** Phase 3: fire an OkHttp request through Argus's interceptor. No-op in release. */
+    /** Fire an OkHttp request through Argus's interceptor. No-op in release. */
     fun fireOkHttpCall(url: String)
 
-    /** Phase 3: fire an HttpURLConnection request wrapped by Argus. No-op in release. */
+    /** Fire an HttpURLConnection request wrapped by Argus. No-op in release. */
     fun fireUrlConnectionCall(url: String)
 
     /**

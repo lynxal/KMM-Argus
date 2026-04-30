@@ -28,7 +28,7 @@ export interface EventStore {
   readonly view: Signal<View>;
   readonly theme: Signal<Theme>;
   readonly density: Signal<Density>;
-  /** Show the optional correlationId column in the EventList. Phase 2. */
+  /** Show the optional correlationId column in the EventList. */
   readonly showCorrelationId: Signal<boolean>;
 
   readonly selectedId: Signal<string | null>;
@@ -146,8 +146,8 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   effect(() => saveString('showCorrelationId', String(showCorrelationId.value)));
   effect(() => saveJson('detailTab', detailTab.value));
 
-  // Phase 3: persist sourceLabels filter only — other filters intentionally
-  // remain non-persistent so reloads don't carry forward incidental state.
+  // Persist sourceLabels filter only — other filters intentionally remain
+  // non-persistent so reloads don't carry forward incidental state.
   effect(() => {
     const labels = filters.value.sourceLabels;
     saveJson('filters.sourceLabels', labels === null ? null : [...labels]);

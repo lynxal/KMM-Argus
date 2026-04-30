@@ -110,7 +110,7 @@ describe('applyFilters', () => {
     expect(out).not.toContain('4');
   });
 
-  describe('sourceLabels (Phase 3)', () => {
+  describe('sourceLabels', () => {
     const events: ArgusEvent[] = [
       ...sample,
       custom('c1', 'analytics', 'session.start', 'sid=abc'),

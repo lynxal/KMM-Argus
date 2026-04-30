@@ -1,5 +1,5 @@
 // Invariant: this file must not import anything from com.lynxal.argus.*
-// Enforced by :sample-android:verifyReleaseHasNoArgus (dexdump the release APK for
+// Enforced by :sample:verifyReleaseHasNoArgus (dexdump the release APK for
 // com/lynxal/argus/, io/ktor/server/, com/lynxal/argus/webui/ — fail if any are present).
 package com.lynxal.argus.sample.debug
 

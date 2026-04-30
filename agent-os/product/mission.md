@@ -26,7 +26,7 @@ Key differentiators:
 
 - **Ktor-native**: first-class Ktor `HttpClient` plugin capturing full request/response including bodies — the only tool in this space that starts here rather than bolting on OkHttp support.
 - **Unified HTTP + log timeline**: HTTP traffic and application log events (via KMMLogging) are interleaved on a single timeline with source badges — no more tab-switching between a network panel and a log viewer.
-- **On-device server, any browser**: an embedded Ktor server serves a static SPA and exposes REST + WebSocket over the LAN. Discovery happens via mDNS/DNS-SD through the existing `:lantern-android` module — open any browser on the same network and you're inspecting.
+- **On-device server, any browser**: an embedded Ktor server serves a static SPA and exposes REST + WebSocket over the LAN. The device prints `Argus listening on http://<host>:<port>` to logcat / NSLog and surfaces it in the sample UI; engineers point any browser on the same LAN at that URL.
 - **Zero friction on IoT hardware**: no certificates, no system proxy, no USB cable. Works on a Canvas Hub sitting on a customer's Wi-Fi.
 - **Debug-only by design**: consumers wire Argus in via `debugImplementation` (and optionally a custom `stagingImplementation`). Release builds contain zero Argus code — no no-op shim, no dead weight, no release-time risk.
-- **KMP-ready**: modules are structured so iOS support can land in Phase 4 without re-architecture.
+- **KMP**: modules are structured so the Android entry point (`:argus-android`) and the iOS entry point (`:argus-ios`) share `:argus-core` + `:argus-server-core` without duplication.

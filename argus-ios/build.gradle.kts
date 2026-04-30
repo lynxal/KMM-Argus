@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.vanniktechMavenPublish)
@@ -7,6 +9,7 @@ plugins {
 val useStaticFramework = findProperty("useStaticFramework")?.toString()?.toBoolean() ?: true
 
 kotlin {
+    val xcf = XCFramework("argus-ios")
     listOf(
         iosX64(),
         iosArm64(),
@@ -15,7 +18,12 @@ kotlin {
         it.binaries.framework {
             baseName = "argus-ios"
             isStatic = useStaticFramework
+            xcf.add(this)
         }
+        // Test binaries link directly (no Apple consumer wraps them), so they need
+        // -lsqlite3 explicitly. Production frameworks rely on the consumer app's
+        // link step to provide libsqlite3.
+        it.binaries.getTest("DEBUG").linkerOpts("-lsqlite3")
     }
 
     applyDefaultHierarchyTemplate()
@@ -51,7 +59,7 @@ mavenPublishing {
     coordinates("com.lynxal.argus", "argus-ios", "0.0.1")
     pom {
         name.set("Argus iOS")
-        description.set("iOS entry point for Argus debug tooling — wires argus-core + argus-server-core into an iOS app via a debug-only XCFramework. Release builds must contain zero classes from this artifact.")
+        description.set("iOS entry point for Argus debug tooling — consumed via Kotlin Multiplatform from Maven Central, or via the published XCFramework on GitHub Releases (Swift Package Manager). Release builds must contain zero classes from this artifact.")
         url.set("https://github.com/lynxal/argus")
         licenses {
             license {

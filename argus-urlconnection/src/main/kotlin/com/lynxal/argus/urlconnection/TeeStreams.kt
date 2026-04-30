@@ -48,6 +48,9 @@ internal class TeeInputStream(
     private var emitted = false
     private var eofReached = false
 
+    val capturedBytes: ByteArray get() = capture.toByteArray()
+    val totalBytesRead: Long get() = totalRead
+
     override fun read(): Int {
         val b = `in`.read()
         if (b == -1) {

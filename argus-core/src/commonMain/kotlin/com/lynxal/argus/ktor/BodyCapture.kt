@@ -15,20 +15,26 @@ private const val READ_BUFFER_SIZE: Int = 8 * 1024
 internal suspend fun ByteReadChannel.drainWithCap(maxBytes: Long): Pair<ByteArray, Long> {
     var total = 0L
     val cap = maxBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-    val capture = ArrayList<Byte>(minOf(cap, 64 * 1024))
+    var capture = ByteArray(minOf(cap, 64 * 1024))
+    var captureSize = 0
     val buf = ByteArray(READ_BUFFER_SIZE)
     while (!isClosedForRead) {
         val read = readAvailable(buf, 0, buf.size)
         if (read < 0) break
         if (read == 0) continue
-        val remainingCap = (cap - capture.size).coerceAtLeast(0)
+        val remainingCap = (cap - captureSize).coerceAtLeast(0)
         if (remainingCap > 0) {
             val toCopy = minOf(read, remainingCap)
-            repeat(toCopy) { i -> capture.add(buf[i]) }
+            if (captureSize + toCopy > capture.size) {
+                val newSize = ((captureSize + toCopy) * 2).coerceAtMost(cap)
+                capture = capture.copyOf(newSize)
+            }
+            buf.copyInto(capture, captureSize, 0, toCopy)
+            captureSize += toCopy
         }
         total += read
     }
-    return capture.toByteArray() to total
+    return capture.copyOf(captureSize) to total
 }
 
 internal fun captureRequestPayload(

@@ -63,8 +63,8 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
     });
   }
 
-  // Phase 3: source-label dropdown — auto-discovers CustomEvent.sourceLabels
-  // from the live stream.
+  // Source-label dropdown — auto-discovers CustomEvent.sourceLabels from the
+  // live stream.
   const sourceLabelDropdown = createSourceLabelDropdown(store);
 
   const div1 = spacerDivider();

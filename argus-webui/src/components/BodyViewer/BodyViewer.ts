@@ -13,7 +13,6 @@ export interface BodyViewerProps {
   readonly contentType?: string | null | undefined;
   readonly sizeBytes?: number | null | undefined;
   readonly truncatedTotalBytes?: number | null | undefined;
-  readonly onLoadFull?: (() => void) | undefined;
 }
 
 export function createBodyViewer(p: BodyViewerProps): HTMLElement {
@@ -65,13 +64,7 @@ export function createBodyViewer(p: BodyViewerProps): HTMLElement {
     const banner = document.createElement('div');
     banner.className =
       'flex items-center gap-2 px-3 h-8 bg-bg-subtle border border-dashed border-border-strong rounded-md text-fg-2 text-xs';
-    banner.textContent = `Body truncated at ${p.sizeBytes ?? 0} of ${p.truncatedTotalBytes} B — `;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'text-fg-link cursor-pointer hover:underline';
-    btn.textContent = 'Load full body';
-    btn.addEventListener('click', () => p.onLoadFull?.());
-    banner.appendChild(btn);
+    banner.textContent = `Body truncated at ${p.sizeBytes ?? 0} of ${p.truncatedTotalBytes} B`;
     root.appendChild(banner);
   }
 

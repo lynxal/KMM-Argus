@@ -8,6 +8,7 @@ import com.lynxal.argus.capture.effectiveMaxBytesFor
 import com.lynxal.argus.capture.encodeCapturedBytes
 import com.lynxal.argus.correlation.activeCorrelationId
 import com.lynxal.argus.model.ArgusEventBus
+import com.lynxal.argus.util.bestEffortFqn
 import com.lynxal.argus.model.HttpError
 import com.lynxal.argus.model.HttpEvent
 import com.lynxal.argus.model.HttpResponse as ArgusHttpResponse
@@ -17,9 +18,7 @@ import kotlin.uuid.Uuid
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okio.Buffer
 
 /**
  * Application-level OkHttp interceptor that publishes [HttpEvent] records to the
@@ -30,6 +29,12 @@ import okio.Buffer
  * Install at application level so the interceptor sees requests as the application
  * built them — adding it as a network interceptor would surface OkHttp's transformed
  * (redirected, retried) requests instead.
+ *
+ * Request bodies are captured via a streaming tee ([TeeingRequestBody]): bytes flow
+ * through to the network sink while up to `maxBodyBytes` are retained for the
+ * inspector. Memory cost during capture is bounded by the cap, not the body size.
+ * One-shot bodies (`RequestBody.isOneShot() == true`) are emitted with metadata only
+ * (no preview).
  *
  * One known limitation: when the response declares `Content-Length: -1` (chunked),
  * `truncatedTotalBytes` cannot be computed without consuming the full body, so the
@@ -49,7 +54,7 @@ public class ArgusOkHttpInterceptor(
         val host = originalRequest.url.host
         val effectiveMax = effectiveMaxBytesFor(host, captureCfg)
 
-        val (capturedRequest, sendableRequest) = buildCapturedRequest(
+        val (capturedSkeleton, sendableRequest, pendingBody) = buildCapturedRequest(
             request = originalRequest,
             effectiveMax = effectiveMax,
             captureRequestBody = config.captureRequestBody,
@@ -59,9 +64,23 @@ public class ArgusOkHttpInterceptor(
         val response = try {
             chain.proceed(sendableRequest)
         } catch (t: IOException) {
+            // Even on send failure, surface whatever the tee captured before the throw.
+            val capturedRequest = finalizeRequestBody(
+                capturedSkeleton,
+                pendingBody,
+                originalRequest.body?.contentType()?.toString(),
+                effectiveMax,
+            )
             emitError(id, startMs, capturedRequest, correlationId, t)
             throw t
         }
+
+        val capturedRequest = finalizeRequestBody(
+            capturedSkeleton,
+            pendingBody,
+            originalRequest.body?.contentType()?.toString(),
+            effectiveMax,
+        )
 
         val capturedBody: CapturedBody? = if (config.captureResponseBody) {
             captureResponseBody(response, effectiveMax)
@@ -110,7 +129,7 @@ public class ArgusOkHttpInterceptor(
                 request = capturedRequest.toHttpRequest(),
                 response = null,
                 error = HttpError(
-                    throwableClass = throwable::class.simpleName ?: throwable::class.toString(),
+                    throwableClass = throwable::class.bestEffortFqn(),
                     message = throwable.message,
                     stackTrace = throwable.stackTraceToString(),
                 ),
@@ -140,6 +159,7 @@ private fun Headers.toRedactedHeaders(
 private data class BuiltRequest(
     val captured: CapturedRequest,
     val sendable: Request,
+    val pendingBody: TeeingRequestBody?,
 )
 
 private fun buildCapturedRequest(
@@ -164,7 +184,7 @@ private fun buildCapturedRequest(
             headers = redactedHeaders,
             body = null,
         )
-        return BuiltRequest(captured, request)
+        return BuiltRequest(captured, request, null)
     }
 
     if (body.isOneShot()) {
@@ -181,24 +201,14 @@ private fun buildCapturedRequest(
                 sizeBytes = body.contentLength().takeIf { it >= 0 },
             ),
         )
-        return BuiltRequest(captured, request)
+        return BuiltRequest(captured, request, null)
     }
 
-    val buffer = Buffer()
-    body.writeTo(buffer)
-    val totalSize = buffer.size
-    val capInt = effectiveMax.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-    val previewBytes = buffer.peek().readByteArray(minOf(buffer.size, capInt.toLong()))
-
-    val capturedBody = encodeCapturedBytes(
-        bytes = previewBytes,
-        contentType = body.contentType()?.toString(),
-        totalSize = totalSize,
-        maxBytes = effectiveMax,
-    )
-
-    val rebuiltBody = buffer.readByteString().toRequestBody(body.contentType())
-    val rebuiltRequest = request.newBuilder().method(method, rebuiltBody).build()
+    // Streaming tee: wrap the original body so it streams through to the network
+    // sink while we capture up to `effectiveMax` bytes for the inspector. Memory
+    // is bounded by `effectiveMax`, not the full body size.
+    val teeing = TeeingRequestBody(body, effectiveMax)
+    val sendable = request.newBuilder().method(method, teeing).build()
 
     val captured = CapturedRequest(
         method = method,
@@ -206,9 +216,26 @@ private fun buildCapturedRequest(
         host = url.host,
         path = path,
         headers = redactedHeaders,
-        body = capturedBody,
+        body = null, // filled in after chain.proceed() drains the tee
     )
-    return BuiltRequest(captured, rebuiltRequest)
+    return BuiltRequest(captured, sendable, teeing)
+}
+
+private fun finalizeRequestBody(
+    captured: CapturedRequest,
+    pendingBody: TeeingRequestBody?,
+    contentType: String?,
+    effectiveMax: Long,
+): CapturedRequest {
+    if (pendingBody == null) return captured
+    val (preview, totalSize) = pendingBody.captured ?: (ByteArray(0) to 0L)
+    val body = encodeCapturedBytes(
+        bytes = preview,
+        contentType = contentType,
+        totalSize = totalSize,
+        maxBytes = effectiveMax,
+    )
+    return captured.copy(body = body)
 }
 
 private fun captureResponseBody(response: Response, effectiveMax: Long): CapturedBody? {

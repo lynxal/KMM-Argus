@@ -8,8 +8,8 @@ import kotlin.coroutines.CoroutineContext
  * by KMMLogging on whatever thread the log site happened to run on).
  *
  * On JVM and Android the actual is backed by [java.lang.ThreadLocal]; iOS is a no-op
- * stub for now (Argus iOS support lands in Phase 4, and HTTP correlation works on iOS
- * via [currentCorrelationId] which reads `coroutineContext` directly).
+ * stub (HTTP correlation works on iOS via [currentCorrelationId], which reads
+ * `coroutineContext` directly).
  */
 internal expect object CorrelationThreadLocal {
     fun get(): String?
@@ -21,6 +21,6 @@ internal expect object CorrelationThreadLocal {
  * [CorrelationThreadLocal] when the coroutine resumes on a thread, and restores the
  * previous value when it suspends. JVM/Android implements this via
  * `kotlinx.coroutines.ThreadContextElement`; iOS returns an empty context (no
- * thread-local propagation) until Phase 4 wires up `:argus-ios`.
+ * thread-local propagation needed there since iOS callers use `currentCorrelationId`).
  */
 internal expect fun threadLocalCorrelationContext(value: String): CoroutineContext

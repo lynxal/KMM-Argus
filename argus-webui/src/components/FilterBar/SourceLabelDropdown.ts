@@ -6,8 +6,8 @@ import { isCustomEvent } from '../../transport/schema';
 const MAX_LABELS = 50;
 
 /**
- * Phase 3: dropdown that lists every CustomEvent.sourceLabel currently in the
- * event buffer, with checkboxes that AND-compose with the source chips. `null`
+ * Dropdown that lists every CustomEvent.sourceLabel currently in the event
+ * buffer, with checkboxes that AND-compose with the source chips. `null`
  * `filters.sourceLabels` means "no restriction"; selecting at least one label
  * switches to a whitelist.
  *
@@ -30,7 +30,7 @@ export function createSourceLabelDropdown(store: EventStore): HTMLElement {
   const triggerLabel = document.createElement('span');
   trigger.appendChild(triggerLabel);
   const caret = document.createElement('span');
-  caret.className = 'text-fg-3 text-[10px]';
+  caret.className = 'text-fg-3 text-xxs';
   caret.textContent = '▾';
   trigger.appendChild(caret);
   wrap.appendChild(trigger);
