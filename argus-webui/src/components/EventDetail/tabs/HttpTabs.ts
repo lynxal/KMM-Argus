@@ -198,12 +198,7 @@ function copyCurlRow(event: HttpEvent): HTMLElement {
   btn.addEventListener('click', () => {
     void navigator.clipboard.writeText(buildCurl(event)).catch(() => undefined);
   });
-  const har = document.createElement('button');
-  har.type = 'button';
-  har.className = 'px-2 h-6 rounded-sm bg-bg-subtle text-fg-1 text-xs font-ui hover:bg-bg-active cursor-pointer';
-  har.textContent = 'Download HAR';
-  har.addEventListener('click', () => downloadHar(event));
-  row.append(btn, har);
+  row.appendChild(btn);
   return row;
 }
 
@@ -212,61 +207,4 @@ function textRow(text: string): HTMLElement {
   el.className = 'text-fg-3 text-xs font-ui';
   el.textContent = text;
   return el;
-}
-
-function downloadHar(event: HttpEvent): void {
-  const har = {
-    log: {
-      version: '1.2',
-      creator: { name: 'Argus', version: '1.0' },
-      entries: [
-        {
-          startedDateTime: new Date(event.timestamp).toISOString(),
-          time: event.durationMs ?? 0,
-          request: {
-            method: event.request.method,
-            url: event.request.url,
-            httpVersion: 'HTTP/1.1',
-            headers: event.request.headers.map((h) => ({ name: h.name, value: h.value })),
-            queryString: [],
-            cookies: [],
-            headersSize: -1,
-            bodySize: event.request.sizeBytes ?? -1,
-            postData: event.request.bodyPreview
-              ? { mimeType: event.request.contentType ?? 'application/octet-stream', text: event.request.bodyPreview }
-              : undefined,
-          },
-          response: event.response
-            ? {
-                status: event.response.statusCode,
-                statusText: event.response.statusText,
-                httpVersion: 'HTTP/1.1',
-                headers: event.response.headers.map((h) => ({ name: h.name, value: h.value })),
-                cookies: [],
-                content: {
-                  size: event.response.sizeBytes ?? -1,
-                  mimeType: event.response.contentType ?? 'application/octet-stream',
-                  text: event.response.bodyPreview ?? '',
-                },
-                redirectURL: '',
-                headersSize: -1,
-                bodySize: event.response.sizeBytes ?? -1,
-              }
-            : undefined,
-          cache: {},
-          timings: {
-            send: 0,
-            wait: event.durationMs ?? 0,
-            receive: 0,
-          },
-        },
-      ],
-    },
-  };
-  const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${event.id}.har`;
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
