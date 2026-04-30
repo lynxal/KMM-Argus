@@ -80,10 +80,14 @@ function renderOverview(event: HttpEvent): HTMLElement {
   const method = document.createElement('span');
   method.className = 'font-mono text-fg-2';
   method.textContent = event.request.method.toUpperCase();
+  const enginePill = document.createElement('span');
+  enginePill.className = 'inline-flex items-center px-1.5 h-5 rounded-xs border border-border-default text-[10px] font-mono leading-none text-fg-3 uppercase';
+  enginePill.textContent = event.engine;
+  enginePill.title = `engine: ${event.engine}`;
   const path = document.createElement('span');
   path.className = 'font-mono truncate';
   path.textContent = event.request.path;
-  title.append(method, path);
+  title.append(method, enginePill, path);
 
   const meta = document.createElement('div');
   meta.className = 'flex items-center gap-2 text-fg-3 text-xs font-mono';

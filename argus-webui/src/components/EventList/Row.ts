@@ -43,6 +43,8 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     method.textContent = event.request.method.toUpperCase().slice(0, 6);
     row.appendChild(method);
 
+    row.appendChild(createEngineChip(event.engine));
+
     const bucket = statusClass(event.response?.statusCode ?? null);
     const statusEl = document.createElement('span');
     statusEl.className = `flex items-center gap-1 ${STATUS_BUCKET_TEXT[bucket]} font-mono w-10`;
@@ -158,6 +160,28 @@ function renderHighlighted(host: HTMLElement, text: string, query: string): void
     host.appendChild(hit);
     i = idx + needle.length;
   }
+}
+
+/** Engine pill for HTTP rows: distinguishes ktor / okhttp / urlconnection. */
+const ENGINE_LABELS: Record<string, string> = {
+  ktor: 'KTOR',
+  okhttp: 'OKHTTP',
+  urlconnection: 'URLCONN',
+};
+const ENGINE_TONES: Record<string, string> = {
+  ktor: 'text-method-get-fg border-method-get-fg/30',
+  okhttp: 'text-method-post-fg border-method-post-fg/30',
+  urlconnection: 'text-method-put-fg border-method-put-fg/30',
+};
+
+function createEngineChip(engine: string): HTMLElement {
+  const span = document.createElement('span');
+  const label = ENGINE_LABELS[engine] ?? engine.toUpperCase();
+  const tone = ENGINE_TONES[engine] ?? 'text-fg-3 border-border-default';
+  span.className = `inline-flex items-center px-1 h-4 rounded-xs border text-[10px] font-mono leading-none ${tone}`;
+  span.textContent = label;
+  span.title = `engine: ${engine}`;
+  return span;
 }
 
 function createCorrelationCell(event: ArgusEvent): HTMLElement {
