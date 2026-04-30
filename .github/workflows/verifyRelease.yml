@@ -31,9 +31,9 @@ jobs:
       - name: Assemble debug (smoke check)
         uses: gradle/actions/setup-gradle@v3
         with:
-          arguments: ":sample-android:assembleDebug"
+          arguments: ":sample:assembleDebug"
 
       - name: Verify release APK has no Argus classes
         uses: gradle/actions/setup-gradle@v3
         with:
-          arguments: ":sample-android:verifyReleaseHasNoArgus"
+          arguments: ":sample:verifyReleaseHasNoArgus"
