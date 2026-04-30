@@ -30,6 +30,20 @@ function log(id: string, tag: string, message: string, level: 'Info' | 'Error' =
   };
 }
 
+function custom(id: string, sourceLabel: string, label: string, payload: string): ArgusEvent {
+  return {
+    type: 'CustomEvent',
+    id,
+    timestamp: 0,
+    source: 'CUSTOM',
+    sourceLabel,
+    label,
+    direction: 'NONE',
+    payload,
+    metadata: {},
+  };
+}
+
 describe('applyFilters', () => {
   const sample: ArgusEvent[] = [
     http('1', 'GET', 200, 'api.example.com', '/users'),
@@ -94,5 +108,50 @@ describe('applyFilters', () => {
     const out = applyFilters(sample, f).map((e) => e.id);
     expect(out).toContain('5');
     expect(out).not.toContain('4');
+  });
+
+  describe('sourceLabels (Phase 3)', () => {
+    const events: ArgusEvent[] = [
+      ...sample,
+      custom('c1', 'analytics', 'session.start', 'sid=abc'),
+      custom('c2', 'ble-mesh', 'node.online', 'addr=0x1A'),
+      custom('c3', 'analytics', 'cart.add', 'sku=A'),
+    ];
+
+    it('null sourceLabels passes every CUSTOM event', () => {
+      const f = cloneFilters(DEFAULT_FILTERS);
+      const out = applyFilters(events, f).map((e) => e.id);
+      expect(out).toEqual(events.map((e) => e.id));
+    });
+
+    it('whitelist Set keeps only matching CUSTOM events', () => {
+      const f = cloneFilters(DEFAULT_FILTERS);
+      f.sourceLabels = new Set(['analytics']);
+      const out = applyFilters(events, f).map((e) => e.id);
+      expect(out).toContain('c1');
+      expect(out).toContain('c3');
+      expect(out).not.toContain('c2');
+    });
+
+    it('empty Set excludes every CUSTOM event but leaves HTTP/LOG alone', () => {
+      const f = cloneFilters(DEFAULT_FILTERS);
+      f.sourceLabels = new Set();
+      const out = applyFilters(events, f).map((e) => e.id);
+      expect(out).not.toContain('c1');
+      expect(out).not.toContain('c2');
+      expect(out).not.toContain('c3');
+      expect(out).toContain('1'); // http unaffected
+      expect(out).toContain('4'); // log unaffected
+    });
+
+    it('AND-composes with the source chip — disabling CUSTOM source drops all customs regardless of sourceLabels', () => {
+      const f = cloneFilters(DEFAULT_FILTERS);
+      f.sources.delete('CUSTOM');
+      f.sourceLabels = new Set(['analytics']);
+      const out = applyFilters(events, f).map((e) => e.id);
+      expect(out).not.toContain('c1');
+      expect(out).not.toContain('c2');
+      expect(out).not.toContain('c3');
+    });
   });
 });

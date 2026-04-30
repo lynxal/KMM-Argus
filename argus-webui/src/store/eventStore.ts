@@ -54,6 +54,15 @@ export interface EventStoreOptions {
   readonly maxEvents?: number;
 }
 
+function restoreFilters(): Filters {
+  const base = cloneFilters(DEFAULT_FILTERS);
+  const persisted = loadJson<string[] | null>('filters.sourceLabels', null);
+  if (persisted && persisted.length > 0) {
+    base.sourceLabels = new Set(persisted);
+  }
+  return base;
+}
+
 /**
  * Build a fresh signal-backed store. One store per app — if you need a new
  * scenario (tests, Storybook), create a new store rather than resetting a
@@ -74,7 +83,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   const selectedId = signal<string | null>(null);
   const selectionSource = signal<SelectionSource>('mouse');
 
-  const filters = signal<Filters>(cloneFilters(DEFAULT_FILTERS));
+  const filters = signal<Filters>(restoreFilters());
   const detailTab = signal<DetailTabs>(
     loadJson<DetailTabs>('detailTab', { HTTP: 'Headers', LOG: 'Message', CUSTOM: 'Payload' }),
   );
@@ -136,6 +145,13 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   effect(() => saveString('density', density.value));
   effect(() => saveString('showCorrelationId', String(showCorrelationId.value)));
   effect(() => saveJson('detailTab', detailTab.value));
+
+  // Phase 3: persist sourceLabels filter only — other filters intentionally
+  // remain non-persistent so reloads don't carry forward incidental state.
+  effect(() => {
+    const labels = filters.value.sourceLabels;
+    saveJson('filters.sourceLabels', labels === null ? null : [...labels]);
+  });
 
   // Theme class on <html>. Lets components react via CSS vars alone.
   effect(() => {

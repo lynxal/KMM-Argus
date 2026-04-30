@@ -20,6 +20,7 @@ import {
   STATUS_BUCKET_DOTS,
   STATUS_BUCKET_TEXT,
 } from './FilterBar.states';
+import { createSourceLabelDropdown } from './SourceLabelDropdown';
 
 export interface FilterBarProps {
   readonly store: EventStore;
@@ -61,6 +62,10 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
       chip.className = active ? `${base} ${tone.bg} ${styles.chipActive}` : `${base} ${styles.chipInactive}`;
     });
   }
+
+  // Phase 3: source-label dropdown — auto-discovers CustomEvent.sourceLabels
+  // from the live stream.
+  const sourceLabelDropdown = createSourceLabelDropdown(store);
 
   const div1 = spacerDivider();
 
@@ -159,6 +164,7 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
       hostQuery: '',
       tagQuery: '',
       textQuery: '',
+      sourceLabels: null,
     });
     hostInput.value = '';
     tagInput.value = '';
@@ -167,6 +173,7 @@ export function createFilterBar({ store, bus }: FilterBarProps): HTMLElement {
 
   bar.append(
     srcGroup,
+    sourceLabelDropdown,
     div1,
     methodGroup,
     div2,

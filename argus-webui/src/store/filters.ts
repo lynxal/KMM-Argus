@@ -24,6 +24,13 @@ export interface Filters {
   hostQuery: string;
   tagQuery: string;
   textQuery: string;
+  /**
+   * Phase 3: optional whitelist of CustomEvent.sourceLabel values. `null` means
+   * "no source-label restriction" — every CUSTOM event passes (subject to other
+   * filters). A non-null Set restricts CUSTOM events to entries whose
+   * sourceLabel is in the set.
+   */
+  sourceLabels: ReadonlySet<string> | null;
 }
 
 export const ALL_SOURCES: readonly WireEventSource[] = ['HTTP', 'LOG', 'CUSTOM'];
@@ -48,6 +55,7 @@ export const DEFAULT_FILTERS: Filters = {
   hostQuery: '',
   tagQuery: '',
   textQuery: '',
+  sourceLabels: null,
 };
 
 export function isDefaultFilters(f: Filters): boolean {
@@ -58,7 +66,8 @@ export function isDefaultFilters(f: Filters): boolean {
     f.levels.size === ALL_LEVELS.length &&
     f.hostQuery === '' &&
     f.tagQuery === '' &&
-    f.textQuery === ''
+    f.textQuery === '' &&
+    f.sourceLabels === null
   );
 }
 
@@ -112,6 +121,7 @@ export function applyFilters(events: readonly ArgusEvent[], f: Filters): ArgusEv
       }
       if (textQ && !e.message.toLowerCase().includes(textQ)) continue;
     } else if (isCustomEvent(e)) {
+      if (f.sourceLabels && !f.sourceLabels.has(e.sourceLabel)) continue;
       if (tagQ && !e.sourceLabel.toLowerCase().includes(tagQ)) continue;
       if (textQ) {
         const hay = `${e.label} ${e.payload}`.toLowerCase();
@@ -133,6 +143,7 @@ export interface MutableFilters {
   hostQuery: string;
   tagQuery: string;
   textQuery: string;
+  sourceLabels: Set<string> | null;
 }
 
 export function cloneFilters(f: Filters): MutableFilters {
@@ -144,5 +155,6 @@ export function cloneFilters(f: Filters): MutableFilters {
     hostQuery: f.hostQuery,
     tagQuery: f.tagQuery,
     textQuery: f.textQuery,
+    sourceLabels: f.sourceLabels === null ? null : new Set(f.sourceLabels),
   };
 }
