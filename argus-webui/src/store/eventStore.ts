@@ -28,6 +28,8 @@ export interface EventStore {
   readonly view: Signal<View>;
   readonly theme: Signal<Theme>;
   readonly density: Signal<Density>;
+  /** Show the optional correlationId column in the EventList. Phase 2. */
+  readonly showCorrelationId: Signal<boolean>;
 
   readonly selectedId: Signal<string | null>;
   readonly selectionSource: Signal<SelectionSource>;
@@ -67,6 +69,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   const view = signal<View>(loadString('view', 'split') as View);
   const theme = signal<Theme>(loadString('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') as Theme);
   const density = signal<Density>(loadString('density', 'compact') as Density);
+  const showCorrelationId = signal<boolean>(loadString<string>('showCorrelationId', 'false') === 'true');
 
   const selectedId = signal<string | null>(null);
   const selectionSource = signal<SelectionSource>('mouse');
@@ -131,6 +134,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   effect(() => saveString('view', view.value));
   effect(() => saveString('theme', theme.value));
   effect(() => saveString('density', density.value));
+  effect(() => saveString('showCorrelationId', String(showCorrelationId.value)));
   effect(() => saveJson('detailTab', detailTab.value));
 
   // Theme class on <html>. Lets components react via CSS vars alone.
@@ -148,6 +152,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     view,
     theme,
     density,
+    showCorrelationId,
     selectedId,
     selectionSource,
     filters,

@@ -64,6 +64,9 @@ export interface HttpEvent {
   response?: HttpResponse | null;
   error?: HttpError | null;
   durationMs?: number | null;
+  /** Phase 2: ArgusCorrelationId stamped at request time. Absent for traffic emitted
+   *  outside any `withCorrelation { ... }` scope. */
+  correlationId?: string | null;
 }
 
 export interface LogEvent {
@@ -76,6 +79,8 @@ export interface LogEvent {
   message: string;
   payload: Record<string, string>;
   throwable?: ThrowableInfo | null;
+  /** Phase 2: see HttpEvent.correlationId. */
+  correlationId?: string | null;
 }
 
 export interface CustomEvent {

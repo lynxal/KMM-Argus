@@ -109,8 +109,11 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
   const helpBtn = iconBtn('keyboard', 'Shortcuts', () => {
     bus.openShortcuts.value = true;
   });
+  const corrIdBtn = iconBtn('link', 'Toggle correlation id column', () => {
+    store.showCorrelationId.value = !store.showCorrelationId.value;
+  });
 
-  bar.append(brand, connPill, viewSwitcher, spacer, search, pauseBtn, clearBtn, themeBtn, helpBtn);
+  bar.append(brand, connPill, viewSwitcher, spacer, search, corrIdBtn, pauseBtn, clearBtn, themeBtn, helpBtn);
 
   // Signals → DOM bindings
   effect(() => {
@@ -140,6 +143,12 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
 
   effect(() => {
     themeBtn.replaceChildren(createIconEl(store.theme.value === 'dark' ? 'sun' : 'moon', 14));
+  });
+
+  effect(() => {
+    corrIdBtn.className = store.showCorrelationId.value
+      ? `${styles.iconBtn} ${styles.iconBtnActive}`
+      : styles.iconBtn;
   });
 
   effect(() => {

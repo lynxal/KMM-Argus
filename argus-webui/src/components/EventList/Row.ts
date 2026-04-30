@@ -18,6 +18,7 @@ export interface RowContext {
   readonly selectedId: string | null;
   readonly selectionSource: 'keyboard' | 'mouse';
   readonly textQuery: string;
+  readonly showCorrelationId: boolean;
   readonly onClick: (event: ArgusEvent) => void;
 }
 
@@ -30,6 +31,10 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
   const row = document.createElement('div');
   row.dataset['eventId'] = event.id;
   row.appendChild(createSrcBadge(event.source));
+
+  if (ctx.showCorrelationId) {
+    row.appendChild(createCorrelationCell(event));
+  }
 
   if (isHttpEvent(event)) {
     const method = document.createElement('span');
@@ -153,6 +158,19 @@ function renderHighlighted(host: HTMLElement, text: string, query: string): void
     host.appendChild(hit);
     i = idx + needle.length;
   }
+}
+
+function createCorrelationCell(event: ArgusEvent): HTMLElement {
+  const cell = document.createElement('span');
+  cell.className = 'text-fg-3 font-mono w-16 truncate';
+  const id = (isHttpEvent(event) || isLogEvent(event)) ? event.correlationId : null;
+  if (id) {
+    cell.textContent = id.slice(0, 8);
+    cell.title = id;
+  } else {
+    cell.textContent = '—';
+  }
+  return cell;
 }
 
 function formatTime(ts: number): string {

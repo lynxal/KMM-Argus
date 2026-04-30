@@ -30,6 +30,7 @@ export function createEventList({ store }: EventListProps): HTMLElement {
         selectedId: store.selectedId.value,
         selectionSource: store.selectionSource.value,
         textQuery: store.filters.value.textQuery,
+        showCorrelationId: store.showCorrelationId.value,
         onClick: (e) => {
           store.selectionSource.value = 'mouse';
           store.selectedId.value = e.id;
@@ -78,11 +79,12 @@ export function createEventList({ store }: EventListProps): HTMLElement {
     }
   });
 
-  // Re-render all rows when selection or textQuery changes.
+  // Re-render all rows when selection, textQuery, or column visibility changes.
   effect(() => {
     void store.selectedId.value;
     void store.selectionSource.value;
     void store.filters.value.textQuery;
+    void store.showCorrelationId.value;
     list.setItems(store.filteredEvents.peek());
   });
 
