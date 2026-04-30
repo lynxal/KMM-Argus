@@ -1,49 +1,16 @@
-@file:OptIn(ExperimentalEncodingApi::class)
+@file:OptIn(InternalArgusApi::class)
 
 package com.lynxal.argus.ktor
 
+import com.lynxal.argus.capture.CapturedBody
+import com.lynxal.argus.capture.InternalArgusApi
+import com.lynxal.argus.capture.encodeCapturedBytes
 import io.ktor.http.ContentType
 import io.ktor.http.content.OutgoingContent
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 private const val READ_BUFFER_SIZE: Int = 8 * 1024
-
-internal fun isTextContent(contentType: ContentType?): Boolean {
-    if (contentType == null) return false
-    if (contentType.match(ContentType.Text.Any)) return true
-    val app = contentType.contentType.equals("application", ignoreCase = true)
-    if (!app) return false
-    val sub = contentType.contentSubtype.lowercase()
-    return sub == "json" ||
-        sub == "xml" ||
-        sub == "javascript" ||
-        sub == "x-www-form-urlencoded" ||
-        sub.endsWith("+json") ||
-        sub.endsWith("+xml")
-}
-
-internal fun encodeCapturedBytes(
-    bytes: ByteArray,
-    contentType: ContentType?,
-    totalSize: Long,
-    maxBytes: Long,
-): CapturedBody {
-    val truncated = totalSize > maxBytes
-    val preview = if (isTextContent(contentType)) {
-        bytes.decodeToString()
-    } else {
-        Base64.encode(bytes)
-    }
-    return CapturedBody(
-        preview = preview,
-        truncatedTotalBytes = if (truncated) totalSize else null,
-        contentType = contentType?.toString(),
-        sizeBytes = totalSize,
-    )
-}
 
 internal suspend fun ByteReadChannel.drainWithCap(maxBytes: Long): Pair<ByteArray, Long> {
     var total = 0L
@@ -76,12 +43,12 @@ internal fun captureRequestPayload(
             val totalSize = bytes.size.toLong()
             val ct = contentTypeHint ?: ContentType.Text.Plain
             val capped = if (bytes.size <= maxBytes) bytes else bytes.copyOf(maxBytes.toInt())
-            encodeCapturedBytes(capped, ct, totalSize, maxBytes)
+            encodeCapturedBytes(capped, ct.toString(), totalSize, maxBytes)
         }
         is ByteArray -> {
             val totalSize = content.size.toLong()
             val capped = if (content.size <= maxBytes) content else content.copyOf(maxBytes.toInt())
-            encodeCapturedBytes(capped, contentTypeHint, totalSize, maxBytes)
+            encodeCapturedBytes(capped, contentTypeHint?.toString(), totalSize, maxBytes)
         }
         is OutgoingContent -> captureOutgoingContent(content, contentTypeHint, maxBytes)
         else -> null
@@ -100,7 +67,7 @@ private fun captureOutgoingContent(
             val bytes = content.bytes()
             val totalSize = bytes.size.toLong()
             val capped = if (bytes.size <= maxBytes) bytes else bytes.copyOf(maxBytes.toInt())
-            encodeCapturedBytes(capped, ct, totalSize, maxBytes)
+            encodeCapturedBytes(capped, ct?.toString(), totalSize, maxBytes)
         }
         is OutgoingContent.NoContent -> null
         else -> CapturedBody(

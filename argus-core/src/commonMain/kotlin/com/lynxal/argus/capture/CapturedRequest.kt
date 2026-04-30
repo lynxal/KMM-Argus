@@ -1,9 +1,10 @@
-package com.lynxal.argus.ktor
+package com.lynxal.argus.capture
 
 import com.lynxal.argus.model.Header
 import com.lynxal.argus.model.HttpRequest
 
-internal data class CapturedRequest(
+@InternalArgusApi
+public data class CapturedRequest(
     val method: String,
     val url: String,
     val host: String,
@@ -11,7 +12,7 @@ internal data class CapturedRequest(
     val headers: List<Header>,
     val body: CapturedBody?,
 ) {
-    fun toHttpRequest(): HttpRequest = HttpRequest(
+    public fun toHttpRequest(): HttpRequest = HttpRequest(
         method = method,
         url = url,
         host = host,

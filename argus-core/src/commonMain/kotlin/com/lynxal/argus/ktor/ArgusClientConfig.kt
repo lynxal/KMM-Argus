@@ -1,5 +1,6 @@
 package com.lynxal.argus.ktor
 
+import com.lynxal.argus.capture.ArgusCaptureDefaults
 import com.lynxal.argus.model.ArgusEventBus
 import com.lynxal.argus.model.NoopEventBus
 
@@ -20,15 +21,10 @@ public class ArgusClientConfig {
     public var fullBodyHosts: Set<String> = emptySet()
 
     public companion object {
-        public const val DEFAULT_MAX_BODY_BYTES: Long = 1_000_000L
+        public const val DEFAULT_MAX_BODY_BYTES: Long = ArgusCaptureDefaults.MAX_BODY_BYTES
 
-        public val DEFAULT_REDACT_HEADERS: Set<String> = setOf(
-            "Authorization",
-            "Cookie",
-            "Set-Cookie",
-            "Proxy-Authorization",
-        )
+        public val DEFAULT_REDACT_HEADERS: Set<String> = ArgusCaptureDefaults.REDACT_HEADERS
 
-        public const val REDACTED_PLACEHOLDER: String = "***redacted***"
+        public const val REDACTED_PLACEHOLDER: String = ArgusCaptureDefaults.REDACTED_PLACEHOLDER
     }
 }

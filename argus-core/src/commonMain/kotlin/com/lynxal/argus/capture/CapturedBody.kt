@@ -1,6 +1,7 @@
-package com.lynxal.argus.ktor
+package com.lynxal.argus.capture
 
-internal data class CapturedBody(
+@InternalArgusApi
+public data class CapturedBody(
     val preview: String?,
     val truncatedTotalBytes: Long?,
     val contentType: String?,

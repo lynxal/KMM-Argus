@@ -1,5 +1,9 @@
+@file:OptIn(InternalArgusApi::class)
+
 package com.lynxal.argus.ktor
 
+import com.lynxal.argus.capture.CapturedRequest
+import com.lynxal.argus.capture.InternalArgusApi
 import io.ktor.util.AttributeKey
 
 internal val ArgusIdKey: AttributeKey<String> = AttributeKey("ArgusId")

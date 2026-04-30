@@ -1,7 +1,11 @@
-@file:OptIn(ExperimentalUuidApi::class, ExperimentalTime::class, InternalAPI::class)
+@file:OptIn(ExperimentalUuidApi::class, ExperimentalTime::class, InternalAPI::class, InternalArgusApi::class)
 
 package com.lynxal.argus.ktor
 
+import com.lynxal.argus.capture.CapturedBody
+import com.lynxal.argus.capture.CapturedRequest
+import com.lynxal.argus.capture.InternalArgusApi
+import com.lynxal.argus.capture.encodeCapturedBytes
 import com.lynxal.argus.correlation.ArgusCorrelationId
 import com.lynxal.argus.model.ArgusEventBus
 import com.lynxal.argus.model.Header
@@ -83,7 +87,7 @@ public val Argus: ClientPlugin<ArgusClientConfig> = createClientPlugin("Argus", 
                     val (bytes, total) = captureSide.drainWithCap(maxBytes)
                     val body = encodeCapturedBytes(
                         bytes = bytes,
-                        contentType = wrappedResponse.contentTypeOrNull(),
+                        contentType = wrappedResponse.contentTypeOrNull()?.toString(),
                         totalSize = total,
                         maxBytes = maxBytes,
                     )
