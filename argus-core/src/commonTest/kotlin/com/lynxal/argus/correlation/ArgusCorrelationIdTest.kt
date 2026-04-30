@@ -69,7 +69,7 @@ class ArgusCorrelationIdTest {
     }
 
     @Test
-    fun `two new() invocations produce distinct ids`() {
+    fun `two new invocations produce distinct ids`() {
         val a = ArgusCorrelationId.new().value
         val b = ArgusCorrelationId.new().value
         assertNotEquals(a, b)
