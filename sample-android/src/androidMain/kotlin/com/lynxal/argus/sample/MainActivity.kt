@@ -9,10 +9,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as SampleApp
+        val tools = app.debugTools
         setContent {
             App(
                 httpClient = app.httpClient,
-                argusUrl = app.debugTools.observeArgusUrl(),
+                argusUrl = tools.observeArgusUrl(),
+                onPublishCustom = {
+                    tools.publishCustom(
+                        source = "sample",
+                        label = "demo-event",
+                        payload = "Hello from the sample app",
+                    )
+                },
+                onOkHttpCall = { url -> tools.fireOkHttpCall(url) },
+                onUrlConnectionCall = { url -> tools.fireUrlConnectionCall(url) },
+                onCorrelatedPair = { first, second -> tools.fireCorrelatedPair(first, second) },
             )
         }
     }

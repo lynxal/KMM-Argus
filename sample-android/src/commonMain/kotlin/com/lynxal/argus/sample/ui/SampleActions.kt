@@ -1,6 +1,5 @@
 package com.lynxal.argus.sample.ui
 
-import com.lynxal.argus.correlation.withCorrelation
 import com.lynxal.logging.LogLevel
 import com.lynxal.logging.Logger
 import io.ktor.client.HttpClient
@@ -16,24 +15,6 @@ class SampleActions(
     fun onGet(url: String) {
         scope.launch(Dispatchers.Default) {
             runCatching { client.get(url) }
-        }
-    }
-
-    /**
-     * Fire two HTTP calls back-to-back inside the same `withCorrelation` scope so the
-     * resulting `HttpEvent`s and any log lines emitted between them share one correlation
-     * id in the inspector. Useful for eyeballing the optional correlationId column.
-     */
-    fun onCorrelatedPair(first: String, second: String) {
-        scope.launch(Dispatchers.Default) {
-            withCorrelation {
-                val logger = Logger.tag("Argus sample")
-                logger.info { message = "correlated-pair: starting" }
-                runCatching { client.get(first) }
-                logger.info { message = "correlated-pair: first done, firing second" }
-                runCatching { client.get(second) }
-                logger.info { message = "correlated-pair: done" }
-            }
         }
     }
 

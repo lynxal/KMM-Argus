@@ -28,4 +28,20 @@ class DebugToolsImpl(@Suppress("unused") private val app: Application) : DebugTo
     }
 
     override fun observeArgusUrl(): StateFlow<String?> = empty
+
+    override fun publishCustom(source: String, label: String, payload: String) {
+        // no-op in release
+    }
+
+    override fun fireOkHttpCall(url: String) {
+        // no-op in release
+    }
+
+    override fun fireUrlConnectionCall(url: String) {
+        // no-op in release
+    }
+
+    override fun fireCorrelatedPair(first: String, second: String) {
+        // no-op in release
+    }
 }

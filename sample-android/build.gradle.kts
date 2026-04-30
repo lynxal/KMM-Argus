@@ -83,6 +83,9 @@ android {
 dependencies {
     debugImplementation(compose.uiTooling)
     debugImplementation(projects.argusAndroid)
+    debugImplementation(projects.argusOkhttp)
+    debugImplementation(projects.argusUrlconnection)
+    debugImplementation(libs.okhttp)
 }
 
 // Forbidden dex-internal class prefixes in the release APK. If any of these

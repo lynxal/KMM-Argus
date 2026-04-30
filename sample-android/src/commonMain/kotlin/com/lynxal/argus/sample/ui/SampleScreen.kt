@@ -29,6 +29,10 @@ private const val FAILING_URL = "https://this-host-does-not-exist-argus-test.inv
 fun SampleScreen(
     httpClient: HttpClient,
     argusUrl: StateFlow<String?>,
+    onPublishCustom: () -> Unit = {},
+    onOkHttpCall: (String) -> Unit = {},
+    onUrlConnectionCall: (String) -> Unit = {},
+    onCorrelatedPair: (String, String) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
     val actions = SampleActions(httpClient, scope)
@@ -69,7 +73,7 @@ fun SampleScreen(
 
             item {
                 FullWidthButton("Correlated pair: /users/1 → /posts") {
-                    actions.onCorrelatedPair(USERS_URL, POSTS_URL)
+                    onCorrelatedPair(USERS_URL, POSTS_URL)
                 }
             }
 
@@ -80,6 +84,12 @@ fun SampleScreen(
             item { FullWidthButton("Emit INFO log") { actions.onEmit(LogLevel.Info, "Emit INFO log") } }
             item { FullWidthButton("Emit WARN log") { actions.onEmit(LogLevel.Warning, "Emit WARN log") } }
             item { FullWidthButton("Emit ERROR log (with throwable)") { actions.onEmit(LogLevel.Error, "Emit ERROR log (with throwable)") } }
+
+            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+
+            item { FullWidthButton("Emit custom event") { onPublishCustom() } }
+            item { FullWidthButton("OkHttp call: /users/1") { onOkHttpCall(USERS_URL) } }
+            item { FullWidthButton("HttpURLConnection call: /posts") { onUrlConnectionCall(POSTS_URL) } }
         }
     }
 }
