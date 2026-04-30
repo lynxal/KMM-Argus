@@ -1,5 +1,6 @@
 package com.lynxal.argus.server.routes
 
+import com.lynxal.argus.model.ARGUS_SCHEMA_VERSION
 import com.lynxal.argus.server.buffer.EventRingBuffer
 import com.lynxal.argus.server.createTestAppInfo
 import com.lynxal.argus.server.createTestEventFilter
@@ -42,7 +43,7 @@ class WsTest {
         wsClient.webSocket("/ws") {
             val msg = readMessage(this)
             assertTrue(msg is OutboundMessage.Hello)
-            assertEquals(1, msg.schemaVersion)
+            assertEquals(ARGUS_SCHEMA_VERSION, msg.schemaVersion)
             assertEquals("com.example.canvas", msg.info.pkg)
         }
     }

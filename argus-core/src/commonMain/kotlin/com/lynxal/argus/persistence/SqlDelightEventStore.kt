@@ -28,7 +28,7 @@ import kotlin.uuid.ExperimentalUuidApi
  * acquire the same mutex to see a consistent post-prune view.
  *
  * Build the driver via the platform [ArgusDriverFactory] (Android: `AndroidArgusDriverFactory`
- * in `:argus-android`; iOS: deferred to Phase 4).
+ * in `:argus-android`; iOS: `IosArgusDriverFactory` in `:argus-ios`).
  */
 public class SqlDelightEventStore(
     factory: ArgusDriverFactory,

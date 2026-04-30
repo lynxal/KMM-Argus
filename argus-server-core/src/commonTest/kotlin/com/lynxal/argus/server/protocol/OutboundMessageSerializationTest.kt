@@ -25,7 +25,7 @@ class OutboundMessageSerializationTest {
         val encoded = json.encodeToString(OutboundMessage.serializer(), msg)
 
         assertTrue(encoded.contains("\"type\":\"hello\""), encoded)
-        assertTrue(encoded.contains("\"schemaVersion\":1"), encoded)
+        assertTrue(encoded.contains("\"schemaVersion\":$ARGUS_SCHEMA_VERSION"), encoded)
         assertTrue(encoded.contains("\"pkg\":\"com.example.canvas\""), encoded)
     }
 

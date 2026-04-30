@@ -1,5 +1,6 @@
 package com.lynxal.argus.server.routes
 
+import com.lynxal.argus.model.ARGUS_SCHEMA_VERSION
 import com.lynxal.argus.model.ArgusEvent
 import com.lynxal.argus.server.buffer.EventRingBuffer
 import com.lynxal.argus.server.createTestAppInfo
@@ -41,7 +42,7 @@ class RoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
         assertTrue(body.contains("\"pkg\":\"com.example.canvas\""), body)
-        assertTrue(body.contains("\"schemaVersion\":1"), body)
+        assertTrue(body.contains("\"schemaVersion\":$ARGUS_SCHEMA_VERSION"), body)
         assertTrue(body.contains("\"device\":\"Pixel 7 Pro\""), body)
     }
 

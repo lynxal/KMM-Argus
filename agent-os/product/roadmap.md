@@ -74,8 +74,9 @@ Ship an on-device Ktor + log inspector that a Lynxal engineer can wire into a Ca
 - SQLite / SharedPreferences / DataStore inspection.
 - View-hierarchy inspection.
 
-## Phase 4: iOS / KMP completion
+## Phase 4: iOS / KMP completion — shipped 2026-04-30
 
-- `:argus-ios` module — native iOS host integration.
-- Validate `:argus-core`, `:argus-webui-bundle`, and `:argus-server-core` end-to-end on iOS.
-- Parity of Ktor client plugin + KMMLogging delegate on iOS targets.
+- ✅ `:argus-ios` module — native iOS host integration. Mirrors `:argus-android`'s facade pattern (`Argus.start { … }`, `ArgusHandle`, `AppInfoBuilder` via `NSBundle`/`UIDevice`, `LocalIp` via `getifaddrs`, `IosArgusDriverFactory` wrapping SqlDelight `NativeSqliteDriver`).
+- ✅ Validated `:argus-core`, `:argus-webui-bundle`, and `:argus-server-core` end-to-end on iOS. The `expect class ArgusServer` was collapsed to a single `commonMain` class because the actuals were byte-identical and `io.ktor.server.cio` is multiplatform.
+- ✅ Parity of Ktor client plugin + KMMLogging delegate on iOS targets.
+- ✅ Sample app unified — `:sample-android` and `:sample-ios` collapsed into a single `:sample` KMP module that produces both the Android APK and the iOS framework. Compose Multiplatform renders the shared UI on both platforms; the iOS app uses `ComposeUIViewController` to embed the Compose UI in SwiftUI. OkHttp and HttpURLConnection demos remain Android-only (engines are JVM-only). Debug-only contract enforced by `:sample:verifyReleaseHasNoArgus` (Android: dexdump APK) and `:sample:verifyIosReleaseHasNoArgus` (iOS: xcodebuild Release + `nm`/`strings` symbol scan).

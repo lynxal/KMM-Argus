@@ -45,9 +45,6 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.test)
             }
         }
-        val jvmAndAndroidMain by creating { dependsOn(commonMain) }
-        getByName("jvmMain").dependsOn(jvmAndAndroidMain)
-        getByName("androidMain").dependsOn(jvmAndAndroidMain)
 
         val jvmTest by getting {
             dependencies {

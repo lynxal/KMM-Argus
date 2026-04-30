@@ -6,7 +6,9 @@ import android.content.Context
 import com.lynxal.argus.db.AndroidArgusDriverFactory
 import com.lynxal.argus.persistence.NoopEventStore
 import com.lynxal.argus.persistence.SqlDelightEventStore
+import com.lynxal.argus.server.ArgusConfigBuilder
 import com.lynxal.argus.server.ArgusServer
+import com.lynxal.argus.server.argusConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,7 +23,7 @@ public object Argus {
     ): ArgusHandle {
         val app = context.applicationContext
         val appInfo = AppInfoBuilder.from(app)
-        val config = ArgusConfigBuilder(appInfo).apply(configure).build()
+        val config = argusConfig(appInfo, configure)
         val sessionId = Uuid.random().toString()
         val eventStore = if (config.persist) {
             SqlDelightEventStore(AndroidArgusDriverFactory(app))

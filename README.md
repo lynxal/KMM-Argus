@@ -2,7 +2,7 @@
 
 In-app debug tooling for Kotlin Multiplatform apps. Argus runs an embedded Ktor server inside debug builds and serves a desktop-class web UI on the local network — open any browser on the same Wi-Fi and inspect HTTP traffic, application logs, and custom events on a single unified timeline. Built Ktor-first (no OkHttp shim), KMP-ready, and engineered so release builds contain zero Argus classes by construction.
 
-![Argus inspecting :sample-android traffic](docs/ui/hero.png)
+![Argus inspecting :sample traffic](docs/ui/hero.png)
 
 - **Ktor-native HTTP capture** — first-class `HttpClient` plugin captures full request/response including bodies. No proxy, no certificate, no USB cable.
 - **Unified HTTP + log timeline** — HTTP traffic and application logs (via `com.lynxal.logging`) interleave on one stream with source badges. No tab-switching.
@@ -16,7 +16,7 @@ In-app debug tooling for Kotlin Multiplatform apps. Argus runs an embedded Ktor 
 | Attribute | Value |
 |---|---|
 | Version | `0.0.1` |
-| Platforms | Android (KMP-ready; iOS targets compile but are not yet wired) |
+| Platforms | Android, iOS (Ktor-host apps) |
 | `minSdk` | 24 |
 | `compileSdk` / `targetSdk` | 36 |
 | Kotlin | 2.2.0 |
@@ -28,14 +28,14 @@ In-app debug tooling for Kotlin Multiplatform apps. Argus runs an embedded Ktor 
 > **Argus is a debug tool. It must never ship in a release build.**
 >
 > - Argus binds a local TCP port and serves a web UI with full request/response bodies and application logs. In a production app this is a **severe security risk**: any device on the same network can read tokens, PII, and internal traffic.
-> - Argus is published with **no release-safe shim and no no-op variant** — by design. The integration pattern below makes release inclusion physically impossible when followed: a release build that imports `com.lynxal.argus.*` will not compile, and one that links it transitively will be caught by `:sample-android:verifyReleaseHasNoArgus` (CI gate).
+> - Argus is published with **no release-safe shim and no no-op variant** — by design. The integration pattern below makes release inclusion physically impossible when followed: a release build that imports `com.lynxal.argus.*` will not compile, and one that links it transitively will be caught by `:sample:verifyReleaseHasNoArgus` (CI gate).
 > - **Use `debugImplementation` (and optionally `stagingImplementation`).** Never `implementation`, `releaseImplementation`, or `api` — all four leak Argus into the release APK.
 
 The integration pattern (next section) is non-negotiable. It is what keeps the warning above true.
 
 ## 4. Installation — Android
 
-Every code block below is copied verbatim from [`:sample-android`](./sample-android), which is gated on every PR by `:sample-android:verifyReleaseHasNoArgus`. If the sample builds, this README is correct.
+Every code block below is copied verbatim from [`:sample`](./sample), which is gated on every PR by `:sample:verifyReleaseHasNoArgus`. If the sample builds, this README is correct.
 
 ### Step 1 — Add the dependency, debug only
 
@@ -127,7 +127,7 @@ A no-op that mirrors the same shape. The leading invariant comment is **importan
 
 ```kotlin
 // Invariant: this file must not import anything from com.lynxal.argus.*
-// Enforced by :sample-android:verifyReleaseHasNoArgus (dexdump the release APK for
+// Enforced by :sample:verifyReleaseHasNoArgus (dexdump the release APK for
 // com/lynxal/argus/, io/ktor/server/, com/lynxal/argus/webui/ — fail if any are present).
 package com.lynxal.argus.sample.debug
 
@@ -190,7 +190,200 @@ class SampleApp : Application() {
 
 That's the full integration. Run a debug build, hit any HTTP endpoint, and Argus is capturing.
 
-## 5. Optional: Staging Variant
+## 5. Installation — iOS
+
+Every code block below is copied verbatim from [`:sample`](./sample), which is gated by `:sample:verifyIosReleaseHasNoArgus` — an `xcodebuild -configuration Release` followed by a symbol scan of the produced framework. If the sample builds, this README is correct.
+
+The iOS seam works the same way as Android (interface in shared code, real impl in a debug-only source dir, no-op impl in a release source dir) but the variant selection is driven by a Gradle property (`-PargusEnabled`) that the Xcode build phase script flips based on `$CONFIGURATION` instead of by the Android build type.
+
+> [!IMPORTANT]
+> Argus iOS captures Ktor `HttpClient` traffic only. URLSession / Alamofire / native networking interception is **not** supported — your iOS app must use Ktor for HTTP if you want it on the timeline.
+
+### Step 1 — Add iOS targets to your KMP module + Xcode build-phase script
+
+In your sample's `build.gradle.kts`, add iOS targets and a shared framework. Read the `argusEnabled` property at config time, conditionally add `:argus-ios` to `iosMain` deps, and swap the source dir between an enabled and disabled impl:
+
+```kotlin
+val argusEnabled: Boolean =
+    (findProperty("argusEnabled") as? String)?.toBoolean() ?: false
+
+kotlin {
+    androidTarget { /* … */ }
+    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach {
+        it.binaries.framework {
+            baseName = "Sample"
+            isStatic = true
+        }
+    }
+    applyDefaultHierarchyTemplate()
+    sourceSets {
+        val iosMain by getting {
+            kotlin.srcDir(
+                if (argusEnabled) "src/iosArgusEnabledMain/kotlin"
+                else "src/iosArgusDisabledMain/kotlin"
+            )
+            dependencies {
+                implementation(libs.ktor.client.darwin)
+                if (argusEnabled) implementation(projects.argusIos)
+            }
+        }
+    }
+}
+```
+
+In your `iosApp.xcodeproj`, the **Compile Kotlin Framework** build phase passes `-PargusEnabled` based on `$CONFIGURATION`:
+
+```sh
+cd "$SRCROOT/../.."
+if [ "$CONFIGURATION" = "Debug" ]; then
+  ARGUS_ENABLED=true
+else
+  ARGUS_ENABLED=false
+fi
+./gradlew :sample:embedAndSignAppleFrameworkForXcode "-PargusEnabled=$ARGUS_ENABLED"
+```
+
+The Xcode app target also needs `OTHER_LDFLAGS = -lsqlite3` (Argus uses SqlDelight's `NativeSqliteDriver` for optional event persistence; the host app supplies the system sqlite link).
+
+### Step 2 — Reuse the same `DebugTools` interface
+
+The interface defined in §4 Step 2 lives in `commonMain/` and works for both Android and iOS — the Android impls under `src/androidDebug/` + `src/androidRelease/` and the iOS impls under `src/iosArgusEnabledMain/` + `src/iosArgusDisabledMain/` all satisfy the same shape. No duplication.
+
+### Step 3 — Debug implementation (`src/iosArgusEnabledMain/`)
+
+```kotlin
+package com.lynxal.argus.sample.debug
+
+import com.lynxal.argus.ios.Argus
+import com.lynxal.argus.ios.ArgusHandle
+import com.lynxal.argus.logging.ArgusLoggerDelegate
+import com.lynxal.logging.DebugLoggerImplementation
+import com.lynxal.logging.LogLevel
+import com.lynxal.logging.Logger
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.darwin.Darwin
+import com.lynxal.argus.ktor.Argus as ArgusPlugin
+
+class DebugToolsImpl : DebugTools {
+    private val argus: ArgusHandle = Argus.start {
+        port = 8787
+        maxBodyBytes = 262_144L
+    }
+
+    override fun buildHttpClient() = HttpClient(Darwin) {
+        install(ArgusPlugin) {
+            eventBus = argus.eventBus
+            maxBodyBytes = 262_144L
+        }
+    }
+
+    override fun installLogging() {
+        Logger.minLevel = LogLevel.Verbose
+        Logger.add(DebugLoggerImplementation())
+        Logger.add(ArgusLoggerDelegate(argus.eventBus))
+    }
+
+    override fun observeArgusUrl() = argus.url
+    override fun fireOkHttpCall(url: String) { /* JVM-only */ }
+    override fun fireUrlConnectionCall(url: String) { /* JVM-only */ }
+    // …publishCustom and fireCorrelatedPair omitted; see :sample
+}
+```
+
+### Step 4 — Release implementation (`src/iosArgusDisabledMain/`)
+
+The leading invariant comment is **important** — keep it.
+
+```kotlin
+// Invariant: this file must not import anything from com.lynxal.argus.*
+// Enforced by :sample:verifyIosReleaseHasNoArgus (xcodebuild Release then nm/strings
+// on the produced framework binary — fails if any com.lynxal.argus., kfun:com.lynxal.argus.,
+// io.ktor.server., ArgusServer, or ArgusEventBus symbol is present).
+package com.lynxal.argus.sample.debug
+
+import com.lynxal.logging.DebugLoggerImplementation
+import com.lynxal.logging.LogLevel
+import com.lynxal.logging.Logger
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.darwin.Darwin
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+class DebugToolsImpl : DebugTools {
+    private val empty: StateFlow<String?> = MutableStateFlow<String?>(null).asStateFlow()
+    override fun buildHttpClient(): HttpClient = HttpClient(Darwin)
+    override fun installLogging() { Logger.add(DebugLoggerImplementation()) }
+    override fun observeArgusUrl(): StateFlow<String?> = empty
+    override fun publishCustom(source: String, label: String, payload: String) {}
+    override fun fireOkHttpCall(url: String) {}
+    override fun fireUrlConnectionCall(url: String) {}
+    override fun fireCorrelatedPair(first: String, second: String) {}
+}
+```
+
+### Step 5 — Wire it up via ComposeUIViewController + Swift
+
+In `iosMain/`, expose a single `MainViewController()` that constructs the right `DebugToolsImpl` (selected by source-dir swap) and wraps the Compose UI in a UIKit view controller:
+
+```kotlin
+package com.lynxal.argus.sample
+
+import androidx.compose.ui.window.ComposeUIViewController
+import com.lynxal.argus.sample.debug.DebugToolsImpl
+import com.lynxal.argus.sample.ui.App
+import platform.UIKit.UIViewController
+
+fun MainViewController(): UIViewController {
+    val tools = DebugToolsImpl()
+    tools.installLogging()
+    return ComposeUIViewController {
+        App(
+            httpClient = tools.buildHttpClient(),
+            argusUrl = tools.observeArgusUrl(),
+            // …callbacks delegate to tools
+        )
+    }
+}
+```
+
+Swift entry-point (`iosApp/iOSApp.swift`):
+
+```swift
+import SwiftUI
+import Sample
+
+@main
+struct ArgusSampleApp: App {
+    var body: some Scene {
+        WindowGroup { ContentView().ignoresSafeArea() }
+    }
+}
+
+struct ContentView: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        MainViewControllerKt.MainViewController()
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+```
+
+The Swift app calls only `MainViewControllerKt.MainViewController()` — it never imports `com.lynxal.argus.*`. Both Swift and Kotlin uphold the seam.
+
+### Optional — CI gate
+
+Run the iOS gate locally any time you change the build-phase script or seam wiring:
+
+```bash
+./gradlew :sample:verifyIosReleaseHasNoArgus
+```
+
+It runs `xcodebuild -configuration Release -destination 'generic/platform=iOS Simulator'` (no signing identity required), then scans the produced `Sample.framework` binary with `strings` for forbidden symbol fragments (`kfun:com.lynxal.argus.`, `io.ktor.server.`, `ArgusServer`, `ArgusEventBus`). The sample's own `com.lynxal.argus.sample.*` symbols are whitelisted.
+
+> [!NOTE]
+> The iOS framework size grows considerably when Argus is linked (Debug ≈ 65 MB with debug symbols, ≈ 17 MB stripped Release). This is fine for a debug-only artifact — the Release framework, which is what ships, contains none of it.
+
+## 6. Optional: Staging Variant
 
 Argus does not define a `staging` build type — that's a consumer concern. If your app has a staging variant and you want Argus there too:
 
@@ -200,7 +393,7 @@ Argus does not define a `staging` build type — that's a consumer concern. If y
 
 The same source-set seam pattern works for any number of variants. What it never does is leak Argus into `release`.
 
-## 6. Discovering the device from your desktop
+## 7. Discovering the device from your desktop
 
 When `Argus.start()` succeeds, it logs the URL to logcat:
 
@@ -220,7 +413,7 @@ debugTools.observeArgusUrl().collect { url ->
 
 If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's LAN IP and the configured port directly in the browser.
 
-## 7. UI walkthrough
+## 8. UI walkthrough
 
 **Event list.** Single-column stream with source badge (HTTP/LOG/CUSTOM), method or log level, status pill, primary text (host in muted, path in primary), and meta (duration or timestamp). Compact (28 px) and comfy (32 px) row densities. Keyboard navigation moves a 2 px focus rail down the left edge.
 
@@ -240,7 +433,7 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 
 **Keyboard shortcuts.** `/` focuses search. `j` / `k` navigate the event list. `1` / `2` / `3` switch List / Split / Waterfall views. `p` pauses live ingest. `?` opens the shortcut overlay.
 
-## 8. Configuration reference
+## 9. Configuration reference
 
 `Argus.start()` takes a builder block. All options have sensible defaults:
 
@@ -252,7 +445,7 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 | `redactHeaders` | `["Authorization", "Cookie", "Set-Cookie", "Proxy-Authorization"]` | HTTP header names whose values are replaced with `***redacted***` before capture. |
 | `corsDevOrigins` | `["http://localhost:5173"]` | Extra CORS origins for the dev web UI. The bundled production UI is served same-origin and needs no entry here. |
 
-Example (from `:sample-android`):
+Example (from `:sample`):
 
 ```kotlin
 Argus.start(application) {
@@ -261,25 +454,30 @@ Argus.start(application) {
 }
 ```
 
-## 9. Sample app
+## 10. Sample apps
 
-[`:sample-android`](./sample-android) is the canonical, runnable reference. Every code block in §4 is copied from it.
+[`:sample`](./sample) is the canonical reference for both platforms. The same KMP module produces the Android APK and the iOS framework; Compose Multiplatform renders the shared UI on both.
+
+**Android:**
 
 ```bash
 git clone https://github.com/lynxal/argus.git
 cd argus
-./gradlew :sample-android:installDebug
+./gradlew :sample:installDebug
 ```
 
-Launch the sample on a device or emulator, hit a couple of buttons, and open the URL from logcat. You should see Argus working in two minutes.
+Launch on a device or emulator, hit a couple of buttons, and open the URL from logcat. You should see Argus working in two minutes.
 
-The sample also defines `:sample-android:verifyReleaseHasNoArgus`, which assembles the release APK and dexdumps every class — failing if any `com/lynxal/argus/` or `io/ktor/server/` prefix appears. Run it locally any time you change variant wiring:
+**iOS:** open `sample/iosApp/iosApp.xcodeproj` in Xcode and run on a simulator or device with the Debug scheme. The buttons are the same as Android; OkHttp and HttpURLConnection demos are no-ops on iOS (the engines are JVM-only).
+
+Both gates run as part of `:sample:check`. Run them locally any time you change variant wiring:
 
 ```bash
-./gradlew :sample-android:verifyReleaseHasNoArgus
+./gradlew :sample:verifyReleaseHasNoArgus     # Android: dexdumps the release APK
+./gradlew :sample:verifyIosReleaseHasNoArgus  # iOS: scans the Release framework binary
 ```
 
-## 10. Architecture
+## 11. Architecture
 
 ```mermaid
 flowchart LR
@@ -307,7 +505,7 @@ flowchart LR
 
 **Why debug-only?** See [§3](#3-debug-only-distribution-model). The summary: the embedded server is a production-grade attack surface, and the seam-pattern source-set split (with the `verifyReleaseHasNoArgus` CI gate) is the only integration shape we support. There is no no-op artifact, by design — a missing release-side `DebugToolsImpl` is a build error, which is the desired failure mode.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 **Can't connect from desktop.** Most common causes, in order:
 
@@ -318,7 +516,7 @@ flowchart LR
 
 **Release build fails to compile / link.** Confirm `src/release/.../debug/DebugToolsImpl.kt` exists and has the same shape as `src/debug/.../debug/DebugToolsImpl.kt` but **zero `com.lynxal.argus.*` imports**. The release-source-set file is what makes the variant compile when Argus is absent.
 
-**Release APK contains Argus classes.** Run `:sample-android:verifyReleaseHasNoArgus` (or the equivalent in your app) for the canonical diagnostic. Then:
+**Release APK contains Argus classes.** Run `:sample:verifyReleaseHasNoArgus` (or the equivalent in your app) for the canonical diagnostic. Then:
 
 ```bash
 ./gradlew :app:dependencies --configuration releaseRuntimeClasspath | grep -i argus
@@ -326,10 +524,10 @@ flowchart LR
 
 If anything appears, you have an `implementation`, `api`, or `releaseImplementation` line pulling Argus in transitively (often via a shared library that itself uses `implementation` instead of `debugImplementation`). Convert it to `debugImplementation`.
 
-**Something else.** [`:sample-android`](./sample-android) is the canonical working integration. Diff your variant wiring against it.
+**Something else.** [`:sample`](./sample) is the canonical working integration. Diff your variant wiring against it.
 
-## 12. Contributing & License
+## 13. Contributing & License
 
-Issues and pull requests are welcome via GitHub. There is no `CONTRIBUTING.md` yet — the short version: fork, branch, run `./gradlew check :sample-android:verifyReleaseHasNoArgus`, open a PR.
+Issues and pull requests are welcome via GitHub. There is no `CONTRIBUTING.md` yet — the short version: fork, branch, run `./gradlew check :sample:verifyReleaseHasNoArgus`, open a PR.
 
 License: not yet declared. A `LICENSE` file will land before `1.0.0`.
