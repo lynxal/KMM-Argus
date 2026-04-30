@@ -18,7 +18,7 @@ export interface SplitViewProps {
  */
 export function createSplitView({ store }: SplitViewProps): HTMLElement {
   const root = document.createElement('div');
-  root.className = 'flex-1 p-2 flex gap-2 min-h-0';
+  root.className = 'flex-1 p-2 flex gap-2 min-h-0 min-w-0 overflow-hidden';
 
   const list = createEventList({ store });
   list.classList.add('flex-1');

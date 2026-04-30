@@ -15,6 +15,15 @@ const ROW_HEIGHT = 28;
 const GUTTER_W = 240;
 const DUR_W = 70;
 const HEADER_H = 28;
+const AXIS_H = 20;
+/**
+ * ms-per-pixel at zoom=1. Anchors the time scale so existing bars stay put
+ * when new events extend the timeline — the canvas grows to the right
+ * instead of squeezing every prior bar leftward.
+ */
+const BASE_MS_PER_PX = 8;
+/** Browsers fail or crash on very large canvases; cap and let msPerPx grow above the base when the timeline gets too long. */
+const MAX_CANVAS_W = 16384;
 
 /**
  * Waterfall view — canvas for bars + ticks, DOM for the hovered tooltip and
@@ -25,34 +34,48 @@ const HEADER_H = 28;
  */
 export function createWaterfall({ store }: WaterfallProps): HTMLElement {
   const wrapper = document.createElement('div');
+  // `min-w-0` is critical: without it, a flex item's default min-width is its
+  // content's intrinsic size, so a wide canvas inside `body` would push the
+  // whole row (and the page) horizontally.
   wrapper.className =
-    'flex-1 min-h-0 flex flex-col bg-bg-panel rounded-md border border-border-default overflow-hidden';
+    'flex-1 min-h-0 min-w-0 flex flex-col bg-bg-panel rounded-md border border-border-default overflow-hidden';
 
-  // Header: count + time axis + zoom
+  // Header: count + zoom controls. The time-axis lives inside the scroll
+  // container so it stays aligned with the bars when scrolled horizontally.
   const header = document.createElement('div');
-  header.className = 'flex items-center h-7 px-2 gap-2 border-b border-border-default text-fg-3 text-xs font-mono';
+  header.className = 'flex items-center justify-between h-7 px-2 gap-2 border-b border-border-default text-fg-3 text-xs font-mono';
   wrapper.appendChild(header);
 
   const colLabel = document.createElement('span');
-  colLabel.className = 'text-fg-2 w-28';
+  colLabel.className = 'text-fg-2';
   header.appendChild(colLabel);
 
-  const axisCanvas = document.createElement('canvas');
-  axisCanvas.style.flex = '1';
-  const AXIS_H = 20;
-  axisCanvas.style.height = `${AXIS_H}px`;
-  header.appendChild(axisCanvas);
-
+  const zoomGroup = document.createElement('div');
+  zoomGroup.className = 'flex items-center gap-2';
   const zoomOut = iconButton('minus', 'Zoom out');
   const zoomIn = iconButton('plus', 'Zoom in');
   const zoomLabel = document.createElement('span');
   zoomLabel.className = 'text-fg-2 w-12 text-right';
-  header.append(zoomOut, zoomIn, zoomLabel);
+  zoomGroup.append(zoomOut, zoomIn, zoomLabel);
+  header.appendChild(zoomGroup);
 
   // Body — canvas sits beneath a viewport div that handles clicks.
   const body = document.createElement('div');
   body.className = 'relative flex-1 min-h-0 overflow-auto';
+  body.style.scrollbarGutter = 'stable';
   wrapper.appendChild(body);
+
+  // Sticky axis row — pinned to the top of the body, scrolls horizontally with
+  // the bar canvas so labels stay aligned at any zoom level.
+  const axisRow = document.createElement('div');
+  axisRow.className = 'sticky top-0 z-10 bg-bg-panel border-b border-border-subtle';
+  axisRow.style.height = `${AXIS_H}px`;
+  body.appendChild(axisRow);
+
+  const axisCanvas = document.createElement('canvas');
+  axisCanvas.style.display = 'block';
+  axisCanvas.style.height = `${AXIS_H}px`;
+  axisRow.appendChild(axisCanvas);
 
   const canvas = document.createElement('canvas');
   canvas.style.display = 'block';
@@ -66,32 +89,41 @@ export function createWaterfall({ store }: WaterfallProps): HTMLElement {
   // State
   const zoom = signal(1);
   const events = store.filteredEvents;
+  // Set when the body's own click drives the selection — suppresses the
+  // auto-scroll-to-selected step so clicking a visible bar doesn't jump.
+  let selfTriggered = false;
+  // Tracks the last selection we scrolled to. Auto-scroll fires only when
+  // `selectedId` actually changes — not on every redraw, so rapid event
+  // ingestion doesn't keep re-centering the canvas under the user.
+  let lastScrolledId: string | null = null;
 
   // Click → selection
   body.addEventListener('click', (e) => {
     const rect = body.getBoundingClientRect();
-    const y = e.clientY - rect.top + body.scrollTop;
+    const y = e.clientY - rect.top + body.scrollTop - AXIS_H;
+    if (y < 0) return; // click landed on the sticky axis row
     const idx = Math.floor(y / ROW_HEIGHT);
     const list = events.value;
     if (idx < 0 || idx >= list.length) return;
     const evt = list[idx]!;
+    selfTriggered = true;
     store.selectionSource.value = 'mouse';
     store.selectedId.value = evt.id;
   });
 
   body.addEventListener('mousemove', (e) => {
     const rect = body.getBoundingClientRect();
-    const y = e.clientY - rect.top + body.scrollTop;
+    const y = e.clientY - rect.top + body.scrollTop - AXIS_H;
     const idx = Math.floor(y / ROW_HEIGHT);
     const list = events.value;
-    if (idx < 0 || idx >= list.length) {
+    if (y < 0 || idx < 0 || idx >= list.length) {
       tooltip.style.display = 'none';
       return;
     }
     const evt = list[idx]!;
     tooltip.style.display = '';
     tooltip.style.left = `${Math.min(rect.width - 220, e.clientX - rect.left + 12)}px`;
-    tooltip.style.top = `${idx * ROW_HEIGHT - body.scrollTop + 4}px`;
+    tooltip.style.top = `${AXIS_H + idx * ROW_HEIGHT - body.scrollTop + 4}px`;
     tooltip.textContent = describeEvent(evt);
   });
   body.addEventListener('mouseleave', () => {
@@ -108,15 +140,54 @@ export function createWaterfall({ store }: WaterfallProps): HTMLElement {
   // Redraw
   effect(() => {
     const list = events.value;
-    void store.selectedId.value;
-    void zoom.value;
-    drawHeader(axisCanvas, list, zoom.value);
-    drawBody(canvas, body, list, zoom.value, store.selectedId.value);
+    const selectedId = store.selectedId.value;
+    const z = zoom.value;
+    drawHeader(axisCanvas, body, list, z);
+    drawBody(canvas, body, list, z, selectedId);
     colLabel.textContent = `Event · ${list.length}`;
-    zoomLabel.textContent = `${zoom.value.toFixed(2)}×`;
+    zoomLabel.textContent = `${z.toFixed(2)}×`;
+
+    if (selectedId && selectedId !== lastScrolledId && !selfTriggered) {
+      const i = list.findIndex((e) => e.id === selectedId);
+      if (i >= 0) {
+        scrollSelectionIntoView(body, list, i, z);
+      }
+    }
+    lastScrolledId = selectedId;
+    selfTriggered = false;
   });
 
   return wrapper;
+}
+
+function scrollSelectionIntoView(
+  body: HTMLElement,
+  list: readonly ArgusEvent[],
+  index: number,
+  zoom: number,
+): void {
+  const e = list[index]!;
+  // Vertical: bar `index` lives at content y = AXIS_H + index*ROW_HEIGHT.
+  // Visible bars area is [scrollTop + AXIS_H, scrollTop + clientHeight] —
+  // the sticky axis row eats the top AXIS_H of the viewport.
+  const rowTop = AXIS_H + index * ROW_HEIGHT;
+  const rowBottom = rowTop + ROW_HEIGHT;
+  const viewTop = body.scrollTop + AXIS_H;
+  const viewBottom = body.scrollTop + body.clientHeight;
+  if (rowTop < viewTop || rowBottom > viewBottom) {
+    body.scrollTop = Math.max(0, rowTop - (body.clientHeight + AXIS_H) / 2 + ROW_HEIGHT / 2);
+  }
+
+  // Horizontal: only meaningful when canvas is wider than the viewport.
+  const { start, end } = rangeMs(list);
+  const { msPerPx } = computeScale(end - start, body.clientWidth, zoom);
+  const xStart = GUTTER_W + (e.timestamp - start) / msPerPx;
+  const barW = isHttpEvent(e) ? Math.max(1, (e.durationMs ?? 0) / msPerPx) : 2;
+  const visibleLeft = body.scrollLeft;
+  const visibleRight = visibleLeft + body.clientWidth;
+  if (xStart < visibleLeft || xStart + barW > visibleRight) {
+    body.scrollLeft = Math.max(0, xStart - body.clientWidth / 2 + barW / 2);
+  }
 }
 
 function iconButton(icon: 'plus' | 'minus', aria: string): HTMLButtonElement {
@@ -127,6 +198,31 @@ function iconButton(icon: 'plus' | 'minus', aria: string): HTMLButtonElement {
   btn.title = aria;
   btn.appendChild(createIconEl(icon, 12));
   return btn;
+}
+
+/**
+ * Pick the ms-per-pixel and resulting canvas width. msPerPx is anchored to
+ * `BASE_MS_PER_PX / zoom` so a given timestamp always lands at the same pixel
+ * position — bars don't drift when new events extend the timeline; the canvas
+ * grows rightward instead. Zoom always changes msPerPx (and so canvas width),
+ * never gets swallowed by a viewport clamp. For absurdly long timelines we let
+ * msPerPx grow above the base to keep the canvas under `MAX_CANVAS_W` since
+ * browsers struggle past that.
+ */
+function computeScale(
+  spanMs: number,
+  _viewportPx: number,
+  zoom: number,
+): { msPerPx: number; canvasW: number; trackW: number } {
+  const z = Math.max(0.0001, zoom);
+  const baseMs = BASE_MS_PER_PX / z;
+  const fixedSidesPx = GUTTER_W + DUR_W + 8;
+  const maxTrackPx = Math.max(1, MAX_CANVAS_W - fixedSidesPx);
+  const minMsForCap = spanMs / maxTrackPx;
+  const msPerPx = Math.max(baseMs, minMsForCap);
+  const canvasW = fixedSidesPx + Math.max(1, spanMs / msPerPx);
+  const trackW = canvasW - fixedSidesPx;
+  return { msPerPx, canvasW, trackW };
 }
 
 function rangeMs(list: readonly ArgusEvent[]): { start: number; end: number } {
@@ -145,16 +241,18 @@ function readCssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || 'rgb(136, 136, 136)';
 }
 
-function drawHeader(canvas: HTMLCanvasElement, list: readonly ArgusEvent[], zoom: number): void {
+function drawHeader(canvas: HTMLCanvasElement, body: HTMLElement, list: readonly ArgusEvent[], zoom: number): void {
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.parentElement?.clientWidth ?? 600;
+  const { start, end } = rangeMs(list);
+  const spanMs = end - start;
+  const { msPerPx, canvasW: w } = computeScale(spanMs, body.clientWidth, zoom);
   canvas.width = Math.max(1, Math.floor(w * dpr));
-  canvas.height = Math.floor(20 * dpr);
+  canvas.height = Math.floor(AXIS_H * dpr);
   canvas.style.width = `${w}px`;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, 20);
+  ctx.clearRect(0, 0, w, AXIS_H);
 
   const axis = readCssVar('--wf-axis');
   const tick = readCssVar('--wf-tick');
@@ -164,15 +262,16 @@ function drawHeader(canvas: HTMLCanvasElement, list: readonly ArgusEvent[], zoom
   ctx.font = `${axisFontPx}px JetBrains Mono, monospace`;
   ctx.textBaseline = 'top';
 
-  const { start, end } = rangeMs(list);
-  const spanMs = (end - start) / zoom;
-  for (let i = 0; i <= 4; i++) {
-    const x = (i / 4) * w;
+  // One tick roughly every 200 px so the axis stays readable at any zoom.
+  const ticks = Math.max(4, Math.round(w / 200));
+  for (let i = 0; i <= ticks; i++) {
+    const x = (i / ticks) * w;
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, 6);
     ctx.stroke();
-    const ms = Math.round((i / 4) * spanMs);
+    const ms = Math.round((x - GUTTER_W) * msPerPx);
+    if (ms < 0) continue;
     ctx.fillText(`${ms} ms`, x + 2, 8);
   }
 }
@@ -185,7 +284,9 @@ function drawBody(
   selectedId: string | null,
 ): void {
   const dpr = window.devicePixelRatio || 1;
-  const w = viewport.clientWidth;
+  const { start, end } = rangeMs(list);
+  const spanMs = end - start;
+  const { msPerPx, canvasW: w } = computeScale(spanMs, viewport.clientWidth, zoom);
   const totalH = list.length * ROW_HEIGHT;
   canvas.width = Math.max(1, Math.floor(w * dpr));
   canvas.height = Math.max(1, Math.floor(totalH * dpr));
@@ -197,10 +298,6 @@ function drawBody(
   ctx.clearRect(0, 0, w, totalH);
 
   const trackX = GUTTER_W;
-  const trackW = w - GUTTER_W - DUR_W - 8;
-  const { start, end } = rangeMs(list);
-  const spanMs = (end - start) / zoom;
-  const msPerPx = spanMs / Math.max(1, trackW);
 
   const axis = readCssVar('--wf-axis');
   ctx.strokeStyle = axis;

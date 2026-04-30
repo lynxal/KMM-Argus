@@ -146,7 +146,7 @@ export function createFilterBar({ store }: FilterBarProps): HTMLElement {
 
   const clearLink = document.createElement('a');
   clearLink.className = styles.clearLink;
-  clearLink.textContent = 'Clear';
+  clearLink.textContent = 'Clear filters';
   clearLink.addEventListener('click', (e) => {
     e.preventDefault();
     store.filters.value = cloneFilters({

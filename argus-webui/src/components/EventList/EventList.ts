@@ -79,12 +79,19 @@ export function createEventList({ store }: EventListProps): HTMLElement {
     }
   });
 
-  // Re-render all rows when selection, textQuery, or column visibility changes.
+  // Re-render all rows when selection or textQuery changes.
   effect(() => {
     void store.selectedId.value;
     void store.selectionSource.value;
     void store.filters.value.textQuery;
+    list.setItems(store.filteredEvents.peek());
+  });
+
+  // Column visibility changes the row's structure — drop pooled rows so they
+  // get rebuilt with the new layout, not reused from the cache.
+  effect(() => {
     void store.showCorrelationId.value;
+    list.invalidateAll();
     list.setItems(store.filteredEvents.peek());
   });
 

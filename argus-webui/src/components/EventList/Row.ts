@@ -69,7 +69,7 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     row.appendChild(text);
 
     const meta = document.createElement('span');
-    meta.className = 'text-fg-3 font-mono text-xs w-14 text-right';
+    meta.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
     meta.textContent = event.durationMs != null ? `${event.durationMs} ms` : '—';
     row.appendChild(meta);
   } else if (isLogEvent(event)) {
@@ -95,7 +95,7 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     row.appendChild(text);
 
     const meta = document.createElement('span');
-    meta.className = 'text-fg-3 font-mono text-xs w-14 text-right';
+    meta.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
     meta.textContent = formatTime(event.timestamp);
     row.appendChild(meta);
   } else if (isCustomEvent(event)) {
@@ -120,7 +120,7 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     row.appendChild(text);
 
     const meta = document.createElement('span');
-    meta.className = 'text-fg-3 font-mono text-xs w-14 text-right';
+    meta.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
     meta.textContent = formatTime(event.timestamp);
     row.appendChild(meta);
   }

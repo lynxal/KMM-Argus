@@ -20,6 +20,8 @@ export interface VirtualList<T> {
   /** True when the viewport is within `threshold` px of the top (= newest). */
   isAtHead(thresholdPx?: number): boolean;
   onScroll(listener: () => void): () => void;
+  /** Drop all pooled row elements; next render rebuilds them from scratch. */
+  invalidateAll(): void;
 }
 
 export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T> {
@@ -30,6 +32,7 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
 
   const viewport = document.createElement('div');
   viewport.className = 'absolute inset-0 overflow-y-auto overflow-x-hidden';
+  viewport.style.scrollbarGutter = 'stable';
   root.appendChild(viewport);
 
   const innerContent = document.createElement('div');
@@ -49,12 +52,21 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
     const first = Math.max(0, Math.floor(scrollTop / opts.rowHeight) - overscan);
     const last = Math.min(items.length - 1, Math.ceil((scrollTop + viewportHeight) / opts.rowHeight) + overscan);
 
-    const keepKeys = new Set<string>();
+    // If `keyFor` ever returns the same value twice in one pass (e.g. a server
+    // bug or a backfill+ws race produced two events with the same id), the
+    // naive pool would map both occurrences to the same DOM and the second
+    // `transform` write would steal the first row's slot — leaving a visible
+    // gap. Disambiguate the pool slot with a per-pass occurrence counter.
+    const seenInPass = new Map<string, number>();
+    const liveSlots = new Set<string>();
     for (let i = first; i <= last; i++) {
       const item = items[i]!;
-      const key = opts.keyFor(item);
-      keepKeys.add(key);
-      let el = pool.get(key);
+      const baseKey = opts.keyFor(item);
+      const occ = seenInPass.get(baseKey) ?? 0;
+      seenInPass.set(baseKey, occ + 1);
+      const slotKey = occ === 0 ? baseKey : `${baseKey}#${occ}`;
+      liveSlots.add(slotKey);
+      let el = pool.get(slotKey);
       if (!el) {
         el = opts.renderRow(item, i);
         el.style.position = 'absolute';
@@ -63,13 +75,13 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
         el.style.right = '0';
         el.style.height = `${opts.rowHeight}px`;
         innerContent.appendChild(el);
-        pool.set(key, el);
+        pool.set(slotKey, el);
       }
       el.style.transform = `translateY(${i * opts.rowHeight}px)`;
     }
 
     for (const [key, el] of pool) {
-      if (!keepKeys.has(key)) {
+      if (!liveSlots.has(key)) {
         el.remove();
         pool.delete(key);
       }
@@ -101,6 +113,10 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
     onScroll(listener) {
       scrollListeners.add(listener);
       return () => scrollListeners.delete(listener);
+    },
+    invalidateAll() {
+      for (const el of pool.values()) el.remove();
+      pool.clear();
     },
   };
 }
