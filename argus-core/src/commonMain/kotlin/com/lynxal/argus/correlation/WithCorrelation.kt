@@ -8,7 +8,9 @@ import kotlinx.coroutines.withContext
  */
 public suspend fun <T> withCorrelation(block: suspend () -> T): T {
     val id = ArgusCorrelationId.new()
-    return withContext(id + threadLocalCorrelationContext(id.value)) { block() }
+    return withContext(id + threadLocalCorrelationContext(id.value)) {
+        withCorrelationStorage(id.value) { block() }
+    }
 }
 
 /**
@@ -19,4 +21,6 @@ public suspend fun <T> withCorrelation(block: suspend () -> T): T {
 public suspend fun <T> withCorrelation(
     id: String,
     block: suspend () -> T,
-): T = withContext(ArgusCorrelationId(id) + threadLocalCorrelationContext(id)) { block() }
+): T = withContext(ArgusCorrelationId(id) + threadLocalCorrelationContext(id)) {
+    withCorrelationStorage(id) { block() }
+}

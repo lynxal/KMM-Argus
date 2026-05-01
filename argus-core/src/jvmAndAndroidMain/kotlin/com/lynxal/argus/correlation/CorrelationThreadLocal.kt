@@ -31,3 +31,8 @@ private class CorrelationContextElement(
 
 internal actual fun threadLocalCorrelationContext(value: String): CoroutineContext =
     CorrelationContextElement(value)
+
+internal actual suspend fun <T> withCorrelationStorage(
+    value: String,
+    block: suspend () -> T,
+): T = block()
