@@ -52,6 +52,17 @@ kotlin {
     }
 }
 
+// CI workaround: the embedded Ktor/CIO server started by ArgusSmokeTest emits
+// background stdout that has tripped the KGP iOS test reporter on macos-latest
+// runners ("Buffer underflow" / "Multiple entries with same key") even though
+// the assertions pass. Setting ARGUS_SKIP_IOS_SMOKE=true filters the smoke test
+// out at the Gradle task level so the rest of the iosTest source set still runs.
+if (System.getenv("ARGUS_SKIP_IOS_SMOKE") == "true") {
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
+        filter.excludeTestsMatching("com.lynxal.argus.ios.ArgusSmokeTest")
+    }
+}
+
 mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
