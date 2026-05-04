@@ -32,7 +32,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-okhttp", "0.0.1")
+    coordinates("com.lynxal.argus", "argus-okhttp", "0.0.2")
     pom {
         name.set("Argus OkHttp")
         description.set("OkHttp interceptor that publishes HTTP traffic into the shared Argus event bus.")

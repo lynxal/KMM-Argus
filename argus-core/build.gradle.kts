@@ -84,7 +84,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-core", "0.0.1")
+    coordinates("com.lynxal.argus", "argus-core", "0.0.2")
     pom {
         name.set("Argus Core")
         description.set("Shared data model, event bus, and capture APIs for Argus — the in-app debug tooling library for Lynxal Kotlin Multiplatform projects.")

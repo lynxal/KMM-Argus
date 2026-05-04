@@ -86,7 +86,7 @@ class EventRingBufferTest {
     }
 
     @Test
-    fun `slow subscriber channel overflow closes channel`() = runTest {
+    fun `slow subscriber drops oldest queued frames and stays open`() = runTest {
         val buffer = EventRingBuffer(maxEvents = 100, parentContext = SupervisorJob() + StandardTestDispatcher(testScheduler))
         val sub = buffer.subscribe(capacity = 2)
 
@@ -94,16 +94,23 @@ class EventRingBufferTest {
         repeat(5) { buffer.offer(createTestHttpEvent(id = "evt-$it")) }
         testScheduler.runCurrent()
 
-        // Drain until the channel is closed.
-        var closedDetected = false
-        repeat(10) {
+        // Channel must remain open (no lagging-close) and retain the most recent
+        // `capacity` frames, dropping the oldest.
+        val received = mutableListOf<String>()
+        repeat(2) {
             val result = sub.tryReceive()
-            if (result.isClosed) {
-                closedDetected = true
-                return@repeat
-            }
+            assertTrue(result.isSuccess, "expected channel to remain open and yield queued frames")
+            val msg = result.getOrThrow() as OutboundMessage.Event
+            received.add(msg.event.id)
         }
-        assertTrue(closedDetected, "expected subscriber channel to be closed after overflow")
+        assertEquals(listOf("evt-3", "evt-4"), received)
+
+        // Channel still open after draining — further publishes deliver normally.
+        buffer.offer(createTestHttpEvent(id = "evt-after"))
+        testScheduler.runCurrent()
+        val next = sub.tryReceive()
+        assertTrue(next.isSuccess)
+        assertEquals("evt-after", (next.getOrThrow() as OutboundMessage.Event).event.id)
     }
 
     @Test

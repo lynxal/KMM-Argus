@@ -10,8 +10,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ChannelResult
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,11 +36,11 @@ import kotlin.coroutines.CoroutineContext
  *
  * ### Fan-out
  *
- * Each WebSocket subscriber calls [subscribe], receiving a bounded [ReceiveChannel].
- * When the actor publishes an event it `trySend`s to every subscriber. If a subscriber's
- * channel is full (slow consumer) the actor closes that subscriber's channel, signalling
- * the WS route to shut the socket with WebSocket close code 1011 / reason `"lagging"`.
- * The client then reconnects, re-snapshots via `GET /api/events`, and re-subscribes.
+ * Each WebSocket subscriber calls [subscribe], receiving a bounded [ReceiveChannel]
+ * configured with `BufferOverflow.DROP_OLDEST`. A slow consumer therefore loses its
+ * oldest queued frames rather than getting kicked off the socket; the WS stays alive
+ * and resumes catching up the moment the client drains. Clients that need a complete
+ * view across drops re-fetch `GET /api/events` on reconnect.
  *
  * ### Buffer policy
  *
@@ -94,7 +94,10 @@ public class EventRingBuffer internal constructor(
     }
 
     public fun subscribe(capacity: Int = DEFAULT_SUBSCRIBER_CAPACITY): ReceiveChannel<OutboundMessage> {
-        val channel = Channel<OutboundMessage>(capacity = capacity)
+        val channel = Channel<OutboundMessage>(
+            capacity = capacity,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
         _subscribers.update { it + channel }
         return channel
     }
@@ -157,16 +160,12 @@ public class EventRingBuffer internal constructor(
     }
 
     private fun broadcast(message: OutboundMessage) {
+        // DROP_OLDEST overflow policy on the subscriber channels means trySend can only
+        // fail when a channel is closed (e.g. by unsubscribe()); prune those.
         val currentSubs = _subscribers.value
-        val failed = mutableListOf<SendChannel<OutboundMessage>>()
-        for (sub in currentSubs) {
-            val result: ChannelResult<Unit> = sub.trySend(message)
-            if (result.isFailure && !result.isClosed) failed.add(sub)
-            else if (result.isClosed) failed.add(sub)
-        }
-        if (failed.isNotEmpty()) {
-            _subscribers.update { list -> list.filterNot { it in failed } }
-            for (sub in failed) sub.close()
+        val closed = currentSubs.filter { it.trySend(message).isClosed }
+        if (closed.isNotEmpty()) {
+            _subscribers.update { list -> list.filterNot { it in closed } }
         }
     }
 

@@ -134,7 +134,16 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
   function scheduleReconnect(): void {
     connection.value = 'reconnecting';
     retryAt.value = Date.now() + reconnectDelay;
-    setTimeout(() => {
+    setTimeout(async () => {
+      if (shutdown) return;
+      // Refresh device info so the connection pill reflects the current device,
+      // but skip backfill: the store has no id-based dedup, so re-fetching the
+      // 500-event window would re-prepend events the user can already see.
+      try {
+        await fetchDevice();
+      } catch (err) {
+        console.error('argus reconnect handshake failed', err);
+      }
       if (shutdown) return;
       openStream();
       reconnectDelay = Math.min(reconnectDelay * 2, 10_000);

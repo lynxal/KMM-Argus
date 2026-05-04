@@ -30,7 +30,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-urlconnection", "0.0.1")
+    coordinates("com.lynxal.argus", "argus-urlconnection", "0.0.2")
     pom {
         name.set("Argus HttpURLConnection")
         description.set("HttpURLConnection wrapper that publishes HTTP traffic into the shared Argus event bus.")

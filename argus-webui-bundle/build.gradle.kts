@@ -173,7 +173,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-webui-bundle", "0.0.1")
+    coordinates("com.lynxal.argus", "argus-webui-bundle", "0.0.2")
     pom {
         name.set("Argus WebUI Bundle")
         description.set("KMP module that bundles the pre-built Argus web UI as gzipped Base64 byte streams for serving from argus-server-core.")

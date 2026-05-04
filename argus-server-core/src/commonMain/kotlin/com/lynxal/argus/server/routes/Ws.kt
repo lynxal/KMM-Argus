@@ -9,9 +9,7 @@ import com.lynxal.argus.server.protocol.InboundMessage
 import com.lynxal.argus.server.protocol.OutboundMessage
 import io.ktor.server.routing.Route
 import io.ktor.server.websocket.webSocket
-import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
-import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
 import kotlinx.coroutines.coroutineScope
@@ -49,8 +47,8 @@ private suspend fun streamOutbound(
         if (!matchesOutbound(msg, filter())) continue
         session.send(Frame.Text(ArgusJson.encodeToString(OutboundMessage.serializer(), msg)))
     }
-    // sub was closed by the buffer — lagging subscriber, shut the socket.
-    session.close(CloseReason(CloseReason.Codes.INTERNAL_ERROR, "lagging"))
+    // Channel closes only on unsubscribe() (the WS is shutting down anyway) or buffer
+    // shutdown — no need to close the session ourselves.
 }
 
 private fun matchesOutbound(msg: OutboundMessage, filter: EventFilter): Boolean = when (msg) {

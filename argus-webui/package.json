@@ -1,6 +1,6 @@
 {
   "name": "argus-webui",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "description": "Argus Inspector — browser UI for the on-device event stream",

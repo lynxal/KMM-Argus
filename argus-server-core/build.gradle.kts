@@ -84,7 +84,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-server-core", "0.0.1")
+    coordinates("com.lynxal.argus", "argus-server-core", "0.0.2")
     pom {
         name.set("Argus Server Core")
         description.set("Embedded Ktor server (REST + WebSocket) that serves the Argus debug bridge to the local network. Pairs with argus-core and argus-webui-bundle.")

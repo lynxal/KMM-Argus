@@ -60,7 +60,7 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-android", "0.0.1")
+    coordinates("com.lynxal.argus", "argus-android", "0.0.2")
     pom {
         name.set("Argus Android")
         description.set("Android entry point for Argus debug tooling — wires argus-core + argus-server-core into an Android app via debugImplementation. Release builds must contain zero classes from this artifact.")
