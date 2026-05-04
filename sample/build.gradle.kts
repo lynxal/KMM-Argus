@@ -230,12 +230,20 @@ val verifyIosReleaseHasNoArgus = tasks.register("verifyIosReleaseHasNoArgus") {
         val exit = xcodebuild.waitFor()
         check(exit == 0) { "xcodebuild Release exited with $exit\n$xcodeLog" }
 
-        val framework = File(
-            derivedData,
-            "Build/Products/Sample.framework/Sample",
-        )
-        check(framework.exists()) {
-            "Sample framework binary not found at ${framework.absolutePath}\n$xcodeLog"
+        // Xcode's framework output path varies with the destination/SDK
+        // (`Build/Products/Sample.framework/Sample` on some setups,
+        // `Build/Products/Release-iphonesimulator/Sample.framework/Sample` on
+        // CI's Xcode 16.4), so resolve it by walking Build/Products instead of
+        // hardcoding a single layout. Prefer the standalone framework over an
+        // embedded copy nested inside an .app bundle.
+        val productsDir = File(derivedData, "Build/Products")
+        val candidates = productsDir.walkTopDown()
+            .filter { it.isFile && it.name == "Sample" && it.parentFile?.name == "Sample.framework" }
+            .toList()
+        val framework = candidates.firstOrNull { f -> f.absolutePath.split('/').none { it.endsWith(".app") } }
+            ?: candidates.firstOrNull()
+        check(framework != null && framework.exists()) {
+            "Sample framework binary not found under ${productsDir.absolutePath}\n$xcodeLog"
         }
 
         val stringsProcess = ProcessBuilder("strings", framework.absolutePath)
