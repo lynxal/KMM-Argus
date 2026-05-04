@@ -1,4 +1,4 @@
-name: Verify Release APK
+name: Verify (JVM/Android)
 
 permissions:
   contents: read
@@ -28,12 +28,14 @@ jobs:
           java-version: '17'
           distribution: zulu
 
-      - name: Assemble debug (smoke check)
+      - name: Run JVM/Android tests + sample release leak gate
         uses: gradle/actions/setup-gradle@v3
         with:
-          arguments: ":sample:assembleDebug"
-
-      - name: Verify release APK has no Argus classes
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          arguments: ":sample:verifyReleaseHasNoArgus"
+          arguments: >-
+            jvmTest
+            testDebugUnitTest
+            testReleaseUnitTest
+            :argus-okhttp:test
+            :argus-urlconnection:test
+            :sample:assembleDebug
+            :sample:verifyReleaseHasNoArgus
