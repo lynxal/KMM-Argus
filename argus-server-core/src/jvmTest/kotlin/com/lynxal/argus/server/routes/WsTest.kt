@@ -105,6 +105,38 @@ class WsTest {
     }
 
     @Test
+    fun `slow consumer does not get kicked off the socket`() = testApplication {
+        // Repro for the production bug: a slow client used to exhaust the per-subscriber
+        // channel and the server would CloseReason("lagging") the session, putting the
+        // WebUI in a permanent reconnect loop. With drop-oldest, the WS must stay open
+        // and the client receives the *most recent* frames once it resumes draining.
+        val buffer = EventRingBuffer(maxEvents = 5_000)
+        application { installArgusRoutes(buffer, createTestAppInfo(), emptyList()) }
+        val wsClient = createClient { install(WebSockets) }
+
+        wsClient.webSocket("/ws") {
+            readHello(this)
+            // Pump well past the 1024 default subscriber capacity without draining.
+            repeat(2_000) { buffer.offer(createTestHttpEvent(id = "evt-$it")) }
+            // Give the actor a moment to publish.
+            delay(200)
+
+            // Now drain — the session must still be open and yielding frames.
+            val seen = mutableListOf<String>()
+            withTimeout(5.seconds) {
+                while (seen.size < 100) {
+                    val msg = readMessage(this@webSocket)
+                    if (msg is OutboundMessage.Event) seen.add(msg.event.id)
+                }
+            }
+            // We should be receiving recent events (drop-oldest dropped the early ones).
+            // Reaching this point — successfully draining 100 frames after the burst —
+            // proves the session was not closed by the server.
+            assertTrue(seen.isNotEmpty(), "expected to receive frames after slow-consumer burst")
+        }
+    }
+
+    @Test
     fun `two concurrent sockets receive same event`() = testApplication {
         val buffer = EventRingBuffer(maxEvents = 100)
         application { installArgusRoutes(buffer, createTestAppInfo(), emptyList()) }
