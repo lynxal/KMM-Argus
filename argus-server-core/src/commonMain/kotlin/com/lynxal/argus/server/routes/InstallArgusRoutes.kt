@@ -30,7 +30,15 @@ public fun Application.installArgusRoutes(
     corsOrigins: List<String>,
 ) {
     install(ContentNegotiation) { json(ArgusJson) }
-    install(WebSockets)
+    install(WebSockets) {
+        // Server-driven ping keeps the TCP connection active across any intermediate
+        // (NAT, mobile radio, browser idle handling). Pong-timeout closes a session
+        // only when the client is genuinely gone — well before our reconnect loop
+        // would otherwise mask the issue.
+        pingPeriodMillis = 20_000L
+        timeoutMillis = 30_000L
+        maxFrameSize = Long.MAX_VALUE
+    }
     if (corsOrigins.isNotEmpty()) {
         install(CORS) {
             for (origin in corsOrigins) {

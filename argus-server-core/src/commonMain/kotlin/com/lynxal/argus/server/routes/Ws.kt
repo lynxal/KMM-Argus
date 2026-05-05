@@ -7,6 +7,7 @@ import com.lynxal.argus.server.buffer.EventRingBuffer
 import com.lynxal.argus.server.filter.EventFilter
 import com.lynxal.argus.server.protocol.InboundMessage
 import com.lynxal.argus.server.protocol.OutboundMessage
+import io.ktor.server.application.log
 import io.ktor.server.routing.Route
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
@@ -17,6 +18,8 @@ import kotlinx.coroutines.launch
 
 internal fun Route.installWsRoute(buffer: EventRingBuffer, appInfo: AppInfo) {
     webSocket("/ws") {
+        val log = call.application.log
+        log.info("argus: /ws opened")
         send(ArgusJson.encodeToString(OutboundMessage.serializer(), OutboundMessage.Hello(appInfo, ARGUS_SCHEMA_VERSION)))
 
         var currentFilter: EventFilter = EventFilter()
@@ -32,8 +35,12 @@ internal fun Route.installWsRoute(buffer: EventRingBuffer, appInfo: AppInfo) {
                 }
                 outboundJob.cancel()
             }
+        } catch (cause: Throwable) {
+            log.warn("argus: /ws threw ${cause::class.simpleName}: ${cause.message}", cause)
+            throw cause
         } finally {
             buffer.unsubscribe(sub)
+            log.info("argus: /ws handler exiting (incoming closed or scope cancelled)")
         }
     }
 }
