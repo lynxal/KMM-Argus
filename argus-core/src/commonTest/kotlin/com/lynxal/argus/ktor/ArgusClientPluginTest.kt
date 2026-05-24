@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalEncodingApi::class)
+@file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalEncodingApi::class, io.ktor.utils.io.InternalAPI::class)
 
 package com.lynxal.argus.ktor
 
@@ -7,6 +7,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logger as KtorLogger
+import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.client.request.get
@@ -244,6 +247,126 @@ class ArgusClientPluginTest {
         }
         val result = client.get("https://api.example.com/n").bodyAsText()
         assertEquals("ok", result)
+    }
+
+    // Regression: the host app was receiving "Channel was cancelled" from
+    // bodyAsText() when Argus's old split()+launched-drainer design composed
+    // with the Logging plugin's own ResponseObserver tee. The app's channel
+    // must now be a brand-new ByteReadChannel that no Argus/observer pump
+    // can cancel.
+
+    @Test
+    fun `body larger than cap is fully readable by app via streamed tail`() = runTest {
+        val bus = RecordingEventBus()
+        val payload = ByteArray(8 * 1024) { (it % 251).toByte() }
+        val client = HttpClient(MockEngine {
+            respond(
+                content = ByteReadChannel(payload),
+                status = HttpStatusCode.OK,
+                headers = headersOf("Content-Type", "application/octet-stream"),
+            )
+        }) {
+            install(Argus) {
+                eventBus = bus
+                maxBodyBytes = 1024L
+            }
+        }
+
+        val received = client.get("https://api.example.com/big")
+            .bodyAsChannel().readRemaining().readByteArray()
+
+        assertContentEquals(payload, received)
+        val e = bus.httpEvents().single()
+        assertEquals(8_192L, e.response?.bodyTruncatedTotalBytes)
+        val preview = assertNotNull(e.response?.bodyPreview)
+        assertEquals(1024, Base64.decode(preview).size)
+    }
+
+    @Test
+    fun `sequential reads with Ktor Logging at LogLevel-ALL never cancel app channel`() = runTest {
+        val bus = RecordingEventBus()
+        val client = HttpClient(MockEngine {
+            respond(
+                content = "[]",
+                status = HttpStatusCode.OK,
+                headers = headersOf("Content-Type", "application/json"),
+            )
+        }) {
+            install(Logging) {
+                logger = object : KtorLogger {
+                    override fun log(message: String) { /* simulate sink */ }
+                }
+                level = LogLevel.ALL
+            }
+            install(Argus) { eventBus = bus }
+        }
+
+        repeat(20) { i ->
+            val text = client.get("https://api.example.com/item/$i").bodyAsText()
+            assertEquals("[]", text)
+        }
+        assertEquals(20, bus.httpEvents().size)
+    }
+
+    // Regression for the `replaceResponse { sameChannel }` bug: Ktor's
+    // DelegatedResponse.rawContent is `get() = origin.content()`, so the
+    // lambda we pass to replaceResponse is re-invoked on EVERY rawContent
+    // access. Returning the same ByteReadChannel instance each time would
+    // let the first downstream consumer (Logging observer, BodyProgress,
+    // ContentNegotiation, etc.) exhaust/cancel it, surfacing as
+    // "Channel was cancelled" to subsequent readers — which is exactly
+    // the production failure mode that bit ProvisionerKMP's /token call.
+    @Test
+    fun `wrapped response rawContent is independently readable across multiple accesses`() = runTest {
+        val bus = RecordingEventBus()
+        val payload = """{"access_token":"abc","refresh_token":"xyz"}"""
+        val client = httpClient(bus) {
+            respond(
+                content = payload,
+                status = HttpStatusCode.OK,
+                headers = headersOf("Content-Type", "application/json"),
+            )
+        }
+
+        val response = client.get("https://api.example.com/token")
+
+        // Simulate downstream pipeline plugins each accessing rawContent
+        // independently — they MUST each get their own fresh, fully-readable channel.
+        val read1 = response.rawContent.readRemaining().readByteArray().decodeToString()
+        val read2 = response.rawContent.readRemaining().readByteArray().decodeToString()
+        val read3 = response.bodyAsText()
+
+        assertEquals(payload, read1)
+        assertEquals(payload, read2)
+        assertEquals(payload, read3)
+    }
+
+    @Test
+    fun `concurrent reads with Ktor Logging at LogLevel-ALL never cancel app channel`() = runTest {
+        val bus = RecordingEventBus()
+        val client = HttpClient(MockEngine {
+            respond(
+                content = """{"ok":true}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf("Content-Type", "application/json"),
+            )
+        }) {
+            install(Logging) {
+                logger = object : KtorLogger {
+                    override fun log(message: String) { /* simulate sink */ }
+                }
+                level = LogLevel.ALL
+            }
+            install(Argus) { eventBus = bus }
+        }
+
+        val texts = (1..10).map { i ->
+            async { client.get("https://api.example.com/item/$i").bodyAsText() }
+        }.awaitAll()
+
+        assertEquals(10, texts.size)
+        texts.forEach { assertEquals("""{"ok":true}""", it) }
+        assertEquals(10, bus.httpEvents().size)
     }
 
 }
