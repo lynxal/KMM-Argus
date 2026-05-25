@@ -173,7 +173,9 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-webui-bundle", "0.0.2")
+    val argusVersion = providers.gradleProperty("argus.version").get()
+    val isSnapshot = providers.gradleProperty("argus.localSnapshot").orNull == "true"
+    coordinates("com.lynxal.argus", "argus-webui-bundle", if (isSnapshot) "$argusVersion-SNAPSHOT" else argusVersion)
     pom {
         name.set("Argus WebUI Bundle")
         description.set("KMP module that bundles the pre-built Argus web UI as gzipped Base64 byte streams for serving from argus-server-core.")

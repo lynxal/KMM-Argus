@@ -32,7 +32,9 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-okhttp", "0.0.2")
+    val argusVersion = providers.gradleProperty("argus.version").get()
+    val isSnapshot = providers.gradleProperty("argus.localSnapshot").orNull == "true"
+    coordinates("com.lynxal.argus", "argus-okhttp", if (isSnapshot) "$argusVersion-SNAPSHOT" else argusVersion)
     pom {
         name.set("Argus OkHttp")
         description.set("OkHttp interceptor that publishes HTTP traffic into the shared Argus event bus.")

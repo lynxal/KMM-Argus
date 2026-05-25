@@ -85,7 +85,9 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-core", "0.0.2")
+    val argusVersion = providers.gradleProperty("argus.version").get()
+    val isSnapshot = providers.gradleProperty("argus.localSnapshot").orNull == "true"
+    coordinates("com.lynxal.argus", "argus-core", if (isSnapshot) "$argusVersion-SNAPSHOT" else argusVersion)
     pom {
         name.set("Argus Core")
         description.set("Shared data model, event bus, and capture APIs for Argus — the in-app debug tooling library for Lynxal Kotlin Multiplatform projects.")

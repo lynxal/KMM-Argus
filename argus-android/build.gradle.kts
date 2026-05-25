@@ -14,6 +14,10 @@ kotlin {
             api(projects.argusServerCore)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.sqldelight.android.driver)
+            // Surface Ktor server logs to Android's logcat so the slf4j NOP warning
+            // doesn't silence diagnostic messages (e.g. WebSocket close reasons).
+            // slf4j-simple writes to stderr which Android routes to logcat.
+            runtimeOnly(libs.slf4j.simple)
         }
         getByName("androidUnitTest").dependencies {
             implementation(kotlin("test"))
@@ -60,7 +64,9 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-android", "0.0.2")
+    val argusVersion = providers.gradleProperty("argus.version").get()
+    val isSnapshot = providers.gradleProperty("argus.localSnapshot").orNull == "true"
+    coordinates("com.lynxal.argus", "argus-android", if (isSnapshot) "$argusVersion-SNAPSHOT" else argusVersion)
     pom {
         name.set("Argus Android")
         description.set("Android entry point for Argus debug tooling — wires argus-core + argus-server-core into an Android app via debugImplementation. Release builds must contain zero classes from this artifact.")

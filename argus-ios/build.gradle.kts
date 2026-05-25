@@ -67,7 +67,9 @@ mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
 
-    coordinates("com.lynxal.argus", "argus-ios", "0.0.2")
+    val argusVersion = providers.gradleProperty("argus.version").get()
+    val isSnapshot = providers.gradleProperty("argus.localSnapshot").orNull == "true"
+    coordinates("com.lynxal.argus", "argus-ios", if (isSnapshot) "$argusVersion-SNAPSHOT" else argusVersion)
     pom {
         name.set("Argus iOS")
         description.set("iOS entry point for Argus debug tooling — consumed via Kotlin Multiplatform from Maven Central, or via the published XCFramework on GitHub Releases (Swift Package Manager). Release builds must contain zero classes from this artifact.")

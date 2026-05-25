@@ -1,10 +1,10 @@
 [versions]
-agp = "8.11.0"
-kotlin = "2.2.0"
+agp = "8.13.1"
+kotlin = "2.3.21"
 kotlinxCoroutines = "1.10.2"
 kotlinxSerialization = "1.8.0"
 kmmLogging = "0.0.6"
-ktor = "3.2.0"
+ktor = "3.4.1"
 composeMultiplatform = "1.8.2"
 androidxActivityCompose = "1.10.1"
 androidxLifecycle = "2.9.1"
@@ -15,6 +15,7 @@ robolectric = "4.12.2"
 vanniktechMavenPublish = "0.33.0"
 sqldelight = "2.0.2"
 okhttp = "4.12.0"
+slf4j = "2.0.13"
 
 [libraries]
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
@@ -46,6 +47,7 @@ sqldelight-sqlite-driver = { group = "app.cash.sqldelight", name = "sqlite-drive
 sqldelight-native-driver = { group = "app.cash.sqldelight", name = "native-driver", version.ref = "sqldelight" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }
 
 [plugins]
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
