@@ -40,7 +40,11 @@ export function createEventList({ store }: EventListProps): HTMLElement {
   });
   wrapper.appendChild(list.root);
 
-  // Jump-to-latest pill — shows when user scrolls away from the head and new events have arrived.
+  // Auto-scroll model: `atHead` doubles as the "follow tail" flag. True by
+  // default → new events are visible as they arrive (they prepend at index 0
+  // and scrollTop=0 keeps showing them). User scrolls away → atHead flips to
+  // false → the list is anchored to the event they were looking at until they
+  // tap the pill or scroll back to the top.
   const atHead = signal(true);
   const hiddenCount = signal(0);
   let lastHeadId: string | null = null;
@@ -48,11 +52,13 @@ export function createEventList({ store }: EventListProps): HTMLElement {
     atHead.value = list.isAtHead();
   });
 
+  // "Follow latest" pill — visible whenever the user has scrolled away from
+  // the head, so the way back to live tail is always discoverable (count
+  // appears only when there's something new to catch up on).
   const pill = document.createElement('button');
   pill.type = 'button';
   pill.className =
     'absolute bottom-2 left-1/2 -translate-x-1/2 px-3 h-7 rounded-pill bg-bg-overlay text-fg-1 shadow-md border border-border-default text-xs font-ui cursor-pointer flex items-center gap-2 transition-opacity duration-base';
-  pill.innerHTML = '';
   pill.addEventListener('click', () => {
     list.scrollToIndex(0);
     atHead.value = true;
@@ -61,10 +67,18 @@ export function createEventList({ store }: EventListProps): HTMLElement {
 
   // Effects
 
+  // Items effect — fires only when filteredEvents change (NOT on scroll).
   effect(() => {
     const events = store.filteredEvents.value;
-    list.setItems(events);
-    // Track hidden-since-scrolled-away count.
+    const anchor = atHead.peek() ? undefined : list.peekAnchor();
+    list.setItems(events, anchor != null ? { anchor } : undefined);
+  });
+
+  // Hidden-count effect — runs when filteredEvents or atHead changes. Does
+  // NOT touch the list (keeping scroll-state mutation out of the hot path
+  // for scroll events, which otherwise re-anchor on every drag tick).
+  effect(() => {
+    const events = store.filteredEvents.value;
     if (atHead.value) {
       hiddenCount.value = 0;
       lastHeadId = events[0]?.id ?? null;
@@ -96,9 +110,10 @@ export function createEventList({ store }: EventListProps): HTMLElement {
   });
 
   effect(() => {
-    const show = !atHead.value && hiddenCount.value > 0;
-    pill.style.display = show ? '' : 'none';
-    pill.textContent = `↑ Jump to latest · ${hiddenCount.value} new`;
+    pill.style.display = atHead.value ? 'none' : '';
+    pill.textContent = hiddenCount.value > 0
+      ? `↑ Jump to latest · ${hiddenCount.value} new`
+      : '↑ Jump to latest';
   });
 
   return wrapper;
