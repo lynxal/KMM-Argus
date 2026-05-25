@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "name": "argus-probe-webui",
+  "description": "Manual probes that verify the running argus server/UI on http://localhost:8787/. Not wired into CI.",
+  "scripts": {
+    "ws": "node ws-probe.js",
+    "ui": "node ui-probe.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

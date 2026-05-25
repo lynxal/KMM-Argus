@@ -17,5 +17,6 @@ local.properties
 # Claude
 .claude/
 
-# Node tooling (scripts/capture-ui.mjs)
+# Node tooling (scripts/capture-ui.mjs, scripts/probe-webui)
 node_modules/
+scripts/probe-webui/last-failure.png
