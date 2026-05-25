@@ -20,31 +20,55 @@ private const val READ_BUFFER_SIZE: Int = 8 * 1024
 internal data class PrefixRead(
     val bytes: ByteArray,
     val sourceExhausted: Boolean,
+    /**
+     * Non-null if the read failed mid-stream. [bytes] still holds everything
+     * successfully read before the failure — callers should wrap with this
+     * partial prefix so the host sees a deterministic truncated body instead
+     * of the original channel with bytes already drained off it.
+     */
+    val readError: Throwable? = null,
 )
 
 /**
  * Reads up to [maxBytes] from this channel into a fresh [ByteArray]. Stops as soon
- * as either the cap is reached or the source is closed. The returned
- * [PrefixRead.sourceExhausted] indicates whether the source had any bytes remaining
- * after the read — callers use it to decide whether they still need to stream a tail.
+ * as either the cap is reached, the source is closed, or a read throws. Never
+ * propagates exceptions; callers inspect [PrefixRead.readError] and
+ * [PrefixRead.sourceExhausted] to decide what to do.
+ *
+ * Non-throwing is intentional: once we've read any bytes off the source channel,
+ * those bytes are gone — the caller must replay them to the host or they're lost.
+ * Letting an exception escape would force the caller into a `runCatching` that
+ * discards the partial buffer, leaving the host to read a truncated body off the
+ * still-partially-drained original channel.
  */
 internal suspend fun ByteReadChannel.readPrefix(maxBytes: Long): PrefixRead {
     val cap = maxBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     var buf = ByteArray(minOf(cap, 64 * 1024))
     var size = 0
     val tmp = ByteArray(READ_BUFFER_SIZE)
-    while (size < cap && !isClosedForRead) {
-        val want = minOf(tmp.size, cap - size)
-        val read = readAvailable(tmp, 0, want)
-        if (read < 0) break
-        if (read == 0) continue
-        if (size + read > buf.size) {
-            buf = buf.copyOf(((size + read) * 2).coerceAtMost(cap))
+    var error: Throwable? = null
+    try {
+        while (size < cap && !isClosedForRead) {
+            val want = minOf(tmp.size, cap - size)
+            val read = readAvailable(tmp, 0, want)
+            if (read < 0) break
+            if (read == 0) continue
+            if (size + read > buf.size) {
+                buf = buf.copyOf(((size + read) * 2).coerceAtMost(cap))
+            }
+            tmp.copyInto(buf, size, 0, read)
+            size += read
         }
-        tmp.copyInto(buf, size, 0, read)
-        size += read
+    } catch (ce: kotlinx.coroutines.CancellationException) {
+        throw ce
+    } catch (t: Throwable) {
+        error = t
     }
-    return PrefixRead(buf.copyOf(size), sourceExhausted = isClosedForRead)
+    return PrefixRead(
+        bytes = buf.copyOf(size),
+        sourceExhausted = error == null && isClosedForRead,
+        readError = error,
+    )
 }
 
 internal class StreamedTail(
@@ -52,10 +76,15 @@ internal class StreamedTail(
     private val tailTotal: () -> Long,
     private val writerJob: WriterJob,
 ) {
-    /** Suspends until the prefix + tail have been fully streamed (or the writer failed),
-     *  then returns the total number of source bytes observed (prefix + tail). */
+    /**
+     * Suspends until the prefix + tail have been fully streamed (or the writer
+     * failed), then returns the total number of source bytes observed
+     * (prefix + tail). Cancellation-cooperative: if the calling scope is
+     * cancelled, [kotlinx.coroutines.CancellationException] propagates and
+     * no event is emitted by the caller.
+     */
     suspend fun awaitTotal(): Long {
-        runCatching { writerJob.job.join() }
+        writerJob.job.join()
         return tailTotal()
     }
 }

@@ -341,6 +341,43 @@ class ArgusClientPluginTest {
         assertEquals(payload, read3)
     }
 
+    // Locks in the streamed-tail path's compatibility with Logging.ALL.
+    // The two existing Logging.ALL tests use small (in-memory replay) bodies;
+    // this one forces the > maxBodyBytes branch so a future change to the
+    // tail-streaming code can't silently regress the observer-composition case.
+    @Test
+    fun `body exceeding cap is fully readable by app with Logging-ALL installed`() = runTest {
+        val bus = RecordingEventBus()
+        val payload = ByteArray(8 * 1024) { (it % 251).toByte() }
+        val client = HttpClient(MockEngine {
+            respond(
+                content = ByteReadChannel(payload),
+                status = HttpStatusCode.OK,
+                headers = headersOf("Content-Type", "application/octet-stream"),
+            )
+        }) {
+            install(Logging) {
+                logger = object : KtorLogger {
+                    override fun log(message: String) { /* simulate sink */ }
+                }
+                level = LogLevel.ALL
+            }
+            install(Argus) {
+                eventBus = bus
+                maxBodyBytes = 1024L
+            }
+        }
+
+        val received = client.get("https://api.example.com/big")
+            .bodyAsChannel().readRemaining().readByteArray()
+
+        assertContentEquals(payload, received)
+        val e = bus.httpEvents().single()
+        assertEquals(8_192L, e.response?.bodyTruncatedTotalBytes)
+        val preview = assertNotNull(e.response?.bodyPreview)
+        assertEquals(1024, Base64.decode(preview).size)
+    }
+
     @Test
     fun `concurrent reads with Ktor Logging at LogLevel-ALL never cancel app channel`() = runTest {
         val bus = RecordingEventBus()
