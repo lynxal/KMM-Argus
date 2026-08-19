@@ -89,6 +89,7 @@ internal fun createTestHttpEvent(
     response: HttpResponse? = createTestHttpResponse(),
     error: HttpError? = null,
     durationMs: Long? = 124L,
+    requestGroupId: String? = null,
 ): HttpEvent = HttpEvent(
     id = id,
     timestamp = timestamp,
@@ -96,6 +97,7 @@ internal fun createTestHttpEvent(
     response = response,
     error = error,
     durationMs = durationMs,
+    requestGroupId = requestGroupId,
 )
 
 internal fun createTestLogEvent(

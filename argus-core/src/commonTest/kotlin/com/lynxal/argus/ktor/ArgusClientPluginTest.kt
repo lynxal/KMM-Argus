@@ -95,6 +95,25 @@ class ArgusClientPluginTest {
         val final = hops.first { it.response?.statusCode == 200 }
         assertEquals("/start", redirect.request.path)
         assertEquals("/final", final.request.path, "the final hop reports its own url")
+
+        val groupId = assertNotNull(redirect.requestGroupId, "every ktor hop carries a group id")
+        assertEquals(
+            groupId,
+            final.requestGroupId,
+            "hops of one logical request share a requestGroupId — it's what ties the chain back together",
+        )
+    }
+
+    @Test
+    fun `a request that is not redirected still carries a requestGroupId`() = runTest {
+        val bus = RecordingEventBus()
+        val client = httpClient(bus) { respond("ok", HttpStatusCode.OK) }
+
+        client.get("https://api.example.com/v1/things")
+
+        // A group of one. Consumers detect a redirect by finding more than one event
+        // in a group, never by the field being present.
+        assertNotNull(bus.httpEvents().single().requestGroupId)
     }
 
     @Test
