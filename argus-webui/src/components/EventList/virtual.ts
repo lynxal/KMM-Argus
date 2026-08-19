@@ -32,6 +32,12 @@ export interface VirtualList<T> {
    */
   setItems(items: readonly T[], options?: { anchor?: ScrollAnchor }): void;
   scrollToIndex(index: number): void;
+  /**
+   * Scroll the row at `index` just inside the viewport, but only when it is
+   * currently outside it. A no-op otherwise, so keyboard nav within the visible
+   * window doesn't jerk the list on every keypress.
+   */
+  scrollIndexIntoView(index: number): void;
   /** True when the viewport is within `threshold` px of the top (= newest). */
   isAtHead(thresholdPx?: number): boolean;
   /** Snapshot of the topmost visible item so it can be restored across a setItems call. */
@@ -57,7 +63,13 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
   viewport.appendChild(innerContent);
 
   let items: readonly T[] = [];
-  const pool = new Map<string, HTMLElement>();
+  // Pooled rows remember which item they were built from. A key can outlive the
+  // item behind it — the store replaces an event in place when a later copy of it
+  // arrives (a redirect's second hop shares the first hop's id) — and reusing the
+  // element would leave the old status and duration on screen. Identity is the
+  // right test: setItems hands back the same object references for untouched
+  // events, so only genuinely replaced rows rebuild.
+  const pool = new Map<string, { el: HTMLElement; item: T }>();
   const scrollListeners = new Set<() => void>();
 
   // Anchor restore: when prepending grows innerContent.height, Chromium fires a
@@ -96,23 +108,29 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
       seenInPass.set(baseKey, occ + 1);
       const slotKey = occ === 0 ? baseKey : `${baseKey}#${occ}`;
       liveSlots.add(slotKey);
-      let el = pool.get(slotKey);
-      if (!el) {
-        el = opts.renderRow(item, i);
+      let entry = pool.get(slotKey);
+      if (entry != null && entry.item !== item) {
+        entry.el.remove();
+        pool.delete(slotKey);
+        entry = undefined;
+      }
+      if (entry == null) {
+        const el = opts.renderRow(item, i);
         el.style.position = 'absolute';
         el.style.top = '0';
         el.style.left = '0';
         el.style.right = '0';
         el.style.height = `${opts.rowHeight}px`;
         innerContent.appendChild(el);
-        pool.set(slotKey, el);
+        entry = { el, item };
+        pool.set(slotKey, entry);
       }
-      el.style.transform = `translateY(${i * opts.rowHeight}px)`;
+      entry.el.style.transform = `translateY(${i * opts.rowHeight}px)`;
     }
 
-    for (const [key, el] of pool) {
+    for (const [key, entry] of pool) {
       if (!liveSlots.has(key)) {
-        el.remove();
+        entry.el.remove();
         pool.delete(key);
       }
     }
@@ -178,6 +196,26 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
       lastSetScrollTop = top;
       render();
     },
+    scrollIndexIntoView(index) {
+      if (index < 0 || index >= items.length) return;
+      const top = index * opts.rowHeight;
+      const bottom = top + opts.rowHeight;
+      const current = viewport.scrollTop;
+      const height = viewport.clientHeight;
+      // Before first layout clientHeight is 0; every row would look off-screen.
+      if (height === 0) return;
+      let target: number;
+      if (top < current) {
+        target = top;
+      } else if (bottom > current + height) {
+        target = bottom - height;
+      } else {
+        return;
+      }
+      viewport.scrollTop = target;
+      lastSetScrollTop = target;
+      render();
+    },
     isAtHead(threshold = 4) {
       return viewport.scrollTop <= threshold;
     },
@@ -203,7 +241,7 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
       return () => scrollListeners.delete(listener);
     },
     invalidateAll() {
-      for (const el of pool.values()) el.remove();
+      for (const entry of pool.values()) entry.el.remove();
       pool.clear();
     },
   };

@@ -18,7 +18,7 @@ function EventList({ events, selectedId, onSelect, selectionMode, containsQuery,
           const rowStyle = {
             ...els.row, height: rowH,
             background: sel ? (selectionMode === 'kb' ? 'var(--bg-selected-kb)' : 'var(--bg-selected)') : 'transparent',
-            boxShadow: sel && selectionMode === 'kb' ? 'inset 2px 0 0 var(--border-focus)' : 'none',
+            boxShadow: sel ? `inset ${selectionMode === 'kb' ? 3 : 2}px 0 0 var(--border-focus)` : 'none',
           };
           return <Row key={ev.id} ev={ev} sel={sel} style={rowStyle} onClick={() => onSelect(ev.id, 'mouse')} hi={containsQuery} />;
         })}
