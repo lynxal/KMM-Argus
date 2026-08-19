@@ -41,12 +41,9 @@ the list following the tail, an event the filter hides used to blank the list �
 DOM at their old offsets while `scrollTop` dropped to 0, and nothing re-rendered until the user
 scrolled.
 
-Self-contained: it boots a fake device (static UI + `/api/info` + `/api/events` + `WS /ws`) on an
-ephemeral port and pushes events on command, so unlike the two probes above it needs **no device and
-no host app** — only a built UI. Serving the bundle same-origin means `app.ts` resolves the device to
-this server, so the real `mountApp` and the real `websocketSource` are what get tested. That matters:
-the bug lived in the app shell above the EventList, and a harness mounting `EventList` alone could not
-have seen it.
+Self-contained via `fake-device.js` (below), so unlike the two probes above it needs **no device and
+no host app** — only a built UI. That matters here: the bug lived in the app shell above the
+EventList, and a harness mounting `EventList` alone could not have seen it.
 
 ```bash
 cd argus-webui && npm run build     # required — the probe serves dist/
@@ -65,6 +62,38 @@ happens in both directions.
 position from the viewport being detached and re-appended, which moves `scrollTop` with no event at
 all.
 
-**Schema-version drift:** same caveat as `ws-probe.js` — `EXPECTED_SCHEMA` at the top of the file must
+## related-logs-probe.js — Related Logs reachable from every group member
+
+Regression cover for the Related Logs tab being HTTP-only. Following a log out of a call's Related
+Logs list selected an event whose tab set had no Related Logs entry, so the tab vanished mid-walk and
+the rest of the correlation group became unreachable without going back to the call.
+
+```bash
+cd argus-webui && npm run build     # required — the probes serve dist/
+cd ../scripts/probe-webui
+node related-logs-probe.js
+```
+
+Backfills one call and three logs sharing a correlation id, plus one log outside any scope. Asserts
+the call still lists its whole scope; that hopping to a log keeps the tab present, active, and listing
+the group minus itself; that a second hop behaves the same; and that a log with no correlation id
+explains the empty panel instead of showing a dead tab.
+
+It reads the tab strip through `[data-detail-tabs]` and the panel through `[data-related-logs]`,
+structurally rather than by Tailwind class, so a restyle cannot turn a real failure into a silent
+pass. A missing strip is reported as a stale `dist/` rather than counted as a failed assertion.
+
+## fake-device.js — the in-process device both probes share
+
+Serves the built `argus-webui/dist/` plus `/api/info`, `/api/events`, and `WS /ws` on an ephemeral
+port, and hands back a `push(event)` for emitting over the socket mid-run. Serving the bundle
+**same-origin** with the API is the point: `app.ts` resolves the device to whatever origin served the
+page, so the real `mountApp` and the real `websocketSource` run, with no test seam in shipped code.
+
+Not usable as a stand-in for the bundled mock source, which replays a finite fixture and cannot emit
+on demand — several of these assertions need an event to arrive *after* the UI is in a particular
+state.
+
+**Schema-version drift:** same caveat as `ws-probe.js` — `EXPECTED_SCHEMA` in `fake-device.js` must
 track `ARGUS_SCHEMA_VERSION` in `argus-webui/src/transport/schema.ts`. A mismatch makes the UI
 disconnect silently, which reads as a connection failure rather than a version problem.

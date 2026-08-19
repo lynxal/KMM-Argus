@@ -18,19 +18,10 @@
 //
 // Requires a built UI:  cd argus-webui && npm run build
 
-const http = require('http');
-const fs = require('fs');
 const path = require('path');
-const { WebSocketServer } = require('ws');
 const { chromium } = require('playwright');
+const { startFakeDevice } = require('./fake-device');
 
-// Must match ARGUS_SCHEMA_VERSION in argus-webui/src/transport/schema.ts. The UI
-// disconnects silently on a mismatch, so a missed bump here looks like a
-// connection failure rather than a version problem. No static check ties them
-// together — bump both when the wire schema changes.
-const EXPECTED_SCHEMA = 2;
-
-const DIST = path.join(__dirname, '..', '..', 'argus-webui', 'dist');
 // 60 rows overflows the ~590 px list viewport at either density. Content taller
 // than the viewport is a precondition of the bug: with a short list the pin
 // early-returns and scrollTop is 0 anyway, so nothing can be stranded.
@@ -44,23 +35,6 @@ const diagnose = process.argv.includes('--diagnose');
 const t0 = Date.now();
 const ts = () => ((Date.now() - t0) / 1000).toFixed(3) + 's';
 const log = (...a) => console.log(ts(), ...a);
-
-const MIME = {
-    '.html': 'text/html; charset=utf-8',
-    '.js': 'text/javascript; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.svg': 'image/svg+xml',
-    '.json': 'application/json; charset=utf-8',
-    '.woff2': 'font/woff2',
-    '.png': 'image/png',
-};
-
-const APP_INFO = {
-    pkg: 'com.lynxal.argus.probe',
-    versionName: '0.0.0-probe',
-    device: 'Probe Device',
-    argusVersion: '0.0.0',
-};
 
 let seq = 0;
 function httpEvent(i) {
@@ -100,67 +74,6 @@ function logEvent() {
         message: `probe debug log ${n}`,
         payload: {},
     };
-}
-
-function startFakeDevice() {
-    const backfill = [];
-    for (let i = 0; i < BACKFILL_COUNT; i++) backfill.push(httpEvent(i));
-
-    const server = http.createServer((req, res) => {
-        const url = new URL(req.url, 'http://localhost');
-        if (url.pathname === '/api/info') {
-            res.writeHead(200, { 'content-type': 'application/json' });
-            res.end(JSON.stringify(APP_INFO));
-            return;
-        }
-        if (url.pathname === '/api/events') {
-            if (req.method === 'DELETE') {
-                res.writeHead(204);
-                res.end();
-                return;
-            }
-            res.writeHead(200, { 'content-type': 'application/json' });
-            res.end(JSON.stringify(backfill));
-            return;
-        }
-        // Static UI. Anything without an extension falls back to index.html.
-        const rel = url.pathname === '/' ? '/index.html' : url.pathname;
-        const file = path.join(DIST, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
-        fs.readFile(file, (err, body) => {
-            if (err) {
-                res.writeHead(404);
-                res.end('not found');
-                return;
-            }
-            res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
-            res.end(body);
-        });
-    });
-
-    const wss = new WebSocketServer({ server, path: '/ws' });
-    const clients = new Set();
-    wss.on('connection', (socket) => {
-        clients.add(socket);
-        socket.on('close', () => clients.delete(socket));
-        socket.send(JSON.stringify({ type: 'hello', info: APP_INFO, schemaVersion: EXPECTED_SCHEMA }));
-    });
-
-    return new Promise((resolve) => {
-        server.listen(0, '127.0.0.1', () => {
-            resolve({
-                port: server.address().port,
-                push(event) {
-                    const frame = JSON.stringify({ type: 'event', event });
-                    for (const c of clients) c.send(frame);
-                },
-                close() {
-                    for (const c of clients) c.terminate();
-                    wss.close();
-                    server.close();
-                },
-            });
-        });
-    });
 }
 
 // --- in-page helpers -------------------------------------------------------
@@ -247,13 +160,16 @@ function check(name, ok, detail) {
 }
 
 (async () => {
-    if (!fs.existsSync(path.join(DIST, 'index.html'))) {
-        console.error(`FAIL: ${DIST}/index.html missing. Run: cd argus-webui && npm run build`);
+    const backfill = [];
+    for (let i = 0; i < BACKFILL_COUNT; i++) backfill.push(httpEvent(i));
+    let device;
+    try {
+        device = await startFakeDevice(backfill);
+    } catch (e) {
+        console.error(`FAIL: ${e.message}`);
         process.exit(1);
     }
-
-    const device = await startFakeDevice();
-    const url = `http://127.0.0.1:${device.port}/`;
+    const url = device.url;
     const browser = await chromium.launch();
     const ctx = await browser.newContext({ viewport: VIEWPORT });
     const page = await ctx.newPage();
