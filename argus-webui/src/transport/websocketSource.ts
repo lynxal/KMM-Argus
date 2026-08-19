@@ -137,8 +137,10 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
     setTimeout(async () => {
       if (shutdown) return;
       // Refresh device info so the connection pill reflects the current device,
-      // but skip backfill: the store has no id-based dedup, so re-fetching the
-      // 500-event window would re-prepend events the user can already see.
+      // but skip backfill: re-fetching the 500-event window would spend a request
+      // re-sending events the user can already see. The store collapses repeated
+      // ids now, so a backfill here would no longer duplicate rows — it would just
+      // be wasted work.
       try {
         await fetchDevice();
       } catch (err) {
