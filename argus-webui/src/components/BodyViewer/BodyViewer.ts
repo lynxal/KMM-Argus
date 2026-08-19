@@ -5,6 +5,10 @@
  *
  * @see design_handoff_argus_inspector/argus/BodyViewer.jsx
  */
+import type { ShortcutBus } from '../../input/keyboard';
+import { bodyDownloadPayload, bodyFileName, downloadFile } from '../../export/exportFile';
+import { styles as topBarStyles } from '../TopBar/TopBar.styles';
+
 export type BodyMode = 'auto' | 'json' | 'text' | 'image' | 'hex' | 'empty';
 
 export interface BodyViewerProps {
@@ -13,6 +17,10 @@ export interface BodyViewerProps {
   readonly contentType?: string | null | undefined;
   readonly sizeBytes?: number | null | undefined;
   readonly truncatedTotalBytes?: number | null | undefined;
+  /** Download filename without an extension. Omit and no Download button renders. */
+  readonly downloadName?: string | undefined;
+  /** Supplies the download's toast. Omit and the download happens silently. */
+  readonly bus?: ShortcutBus | undefined;
 }
 
 export function createBodyViewer(p: BodyViewerProps): HTMLElement {
@@ -49,6 +57,7 @@ export function createBodyViewer(p: BodyViewerProps): HTMLElement {
     ct.textContent = p.contentType;
     toolbar.appendChild(ct);
   }
+  if (p.downloadName != null) toolbar.appendChild(downloadButton(p, mode));
   root.appendChild(toolbar);
 
   const body = document.createElement('div');
@@ -60,7 +69,7 @@ export function createBodyViewer(p: BodyViewerProps): HTMLElement {
   else if (mode === 'hex') body.appendChild(renderHex(p.body));
   else body.appendChild(renderText(p.body));
 
-  if (p.truncatedTotalBytes && p.truncatedTotalBytes > (p.sizeBytes ?? 0)) {
+  if (truncatedAtCapture(p)) {
     const banner = document.createElement('div');
     banner.className =
       'flex items-center gap-2 px-3 h-8 bg-bg-subtle border border-dashed border-border-strong rounded-md text-fg-2 text-xs';
@@ -69,6 +78,48 @@ export function createBodyViewer(p: BodyViewerProps): HTMLElement {
   }
 
   return root;
+}
+
+/**
+ * Saves exactly what the pane shows. A body truncated at capture still
+ * downloads — the missing bytes never reach the browser, so there is nothing
+ * better to offer — but the filename and the toast both say so, so a partial
+ * payload cannot be mistaken for a whole one.
+ */
+function downloadButton(p: BodyViewerProps, mode: BodyMode): HTMLElement {
+  const truncated = truncatedAtCapture(p);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  // Shares TopBar's textual-button class so the app's text buttons match.
+  btn.className = `${topBarStyles.textBtn} ml-auto`;
+  btn.textContent = 'Download';
+  const warning = truncated
+    ? `Downloads the captured ${p.sizeBytes ?? 0} B of ${p.truncatedTotalBytes} B — the rest was never captured`
+    : 'Download this payload';
+  btn.title = warning;
+  btn.setAttribute('aria-label', warning);
+  btn.addEventListener('click', () => {
+    const at = Date.now();
+    const body = p.body ?? '';
+    const name = bodyFileName(p.downloadName ?? 'argus-body', mode, p.contentType ?? null, truncated);
+    let msg: string;
+    try {
+      const { mime, data } = bodyDownloadPayload(body, mode, p.contentType ?? null);
+      downloadFile(name, mime, data);
+      msg = truncated
+        ? `Downloaded ${p.sizeBytes ?? 0} of ${p.truncatedTotalBytes} B — body was truncated at capture`
+        : `Downloaded ${name}`;
+    } catch {
+      msg = 'Download failed';
+    }
+    if (p.bus) p.bus.toast.value = { msg, at };
+  });
+  return btn;
+}
+
+/** The banner's condition, shared so the filename marker cannot drift from it. */
+function truncatedAtCapture(p: BodyViewerProps): boolean {
+  return !!p.truncatedTotalBytes && p.truncatedTotalBytes > (p.sizeBytes ?? 0);
 }
 
 function emptyCard(): HTMLElement {

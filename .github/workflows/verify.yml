@@ -3,9 +3,11 @@ name: Verify (JVM/Android)
 permissions:
   contents: read
 
+# PR-only, plus manual dispatch. A `push: [main]` trigger used to double every
+# PR: the pull_request run and the post-merge push run verify the same tree, so
+# the second one only burned minutes. Use workflow_dispatch to verify main
+# on demand (e.g. before tagging a release).
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:

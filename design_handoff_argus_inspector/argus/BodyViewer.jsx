@@ -16,8 +16,9 @@ function BodyViewer({ variant, data, text, truncated, imageUrl, imageMeta, noBod
             <button style={bv.smallBtn}>Collapse all</button>
           </>}
           {variant === 'text' && <button style={bv.smallBtn}>Wrap</button>}
-          <button style={bv.iconBtn} title="Copy"><Icon name="copy" size={12}/></button>
-          <button style={bv.iconBtn} title="Download"><Icon name="download" size={12}/></button>
+          {/* Textual, not an icon — see agent-os/specs/2026-08-19-1754-webui-export-and-raw-download.
+              Copy is served by the ⌘C shortcut and "Copy as cURL" instead. */}
+          <button style={bv.smallBtn} title="Download this payload">Download</button>
         </div>
       </div>
       {truncated && (

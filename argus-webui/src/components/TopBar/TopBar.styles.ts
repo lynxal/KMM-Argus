@@ -13,6 +13,9 @@ export const styles = {
   viewSegmentActive: 'bg-bg-panel text-fg-1 shadow-sm',
   spacer: 'flex-1',
   search: 'h-6 w-60 px-2 rounded-md bg-bg-subtle text-fg-1 placeholder:text-fg-3 font-mono text-xs outline-none border border-border-default focus:border-border-focus',
+  // Textual CTA. Same tokens as the "Copy as cURL" button in HttpTabs so the
+  // app's textual buttons match; BodyViewer's Download button reuses this string.
+  textBtn: 'flex items-center px-2 h-6 rounded-sm bg-bg-subtle text-fg-1 text-xs font-ui hover:bg-bg-active transition-colors duration-base cursor-pointer',
   iconBtn: 'flex items-center justify-center w-6 h-6 rounded-sm text-fg-2 hover:bg-bg-hover hover:text-fg-1 transition-colors duration-base cursor-pointer',
   iconBtnActive: 'bg-bg-active text-fg-1',
 } as const;

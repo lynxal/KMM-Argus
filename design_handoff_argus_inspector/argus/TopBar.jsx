@@ -1,5 +1,5 @@
 // TopBar.jsx
-function TopBar({ view, setView, theme, setTheme, conn, paused, onPauseToggle, onClear, query, setQuery, onHelp, onCycleConn }) {
+function TopBar({ view, setView, theme, setTheme, conn, paused, onPauseToggle, onClear, onExport, query, setQuery, onHelp, onCycleConn }) {
   const viewOpts = [
     { id: 'list', label: 'List', icon: 'panelLeft' },
     { id: 'split', label: 'Split', icon: 'columns' },
@@ -44,6 +44,8 @@ function TopBar({ view, setView, theme, setTheme, conn, paused, onPauseToggle, o
       </div>
 
       <div style={tbs.actions}>
+        {/* Textual CTA opening a two-item menu: Export all / Export filtered. */}
+        <button onClick={onExport} style={tbs.textBtn} title="Export events as JSON">Export <span style={{color:'var(--fg-3)'}}>▾</span></button>
         <button onClick={onClear} style={tbs.iconBtn} title="Clear events (x)"><Icon name="trash" size={13} /></button>
         <button onClick={onPauseToggle} style={{ ...tbs.iconBtn, color: paused ? 'var(--amber-600)' : 'var(--fg-2)' }} title={paused ? 'Resume (p)' : 'Pause (p)'}>
           <Icon name={paused ? 'play' : 'pause'} size={13} />
@@ -79,6 +81,7 @@ const tbs = {
   searchInput: { flex: 1, border: 0, background: 'transparent', color: 'var(--fg-1)', font: '400 12px/1 "JetBrains Mono"', outline: 'none' },
   clearBtn: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, border: 0, background: 'transparent', color: 'var(--fg-2)', cursor: 'pointer', padding: 0, borderRadius: 3 },
   actions: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 },
+  textBtn: { height: 24, display: 'inline-flex', alignItems: 'center', padding: '0 8px', border: 0, background: 'var(--bg-subtle)', color: 'var(--fg-1)', font: '500 11px/1 Inter', borderRadius: 3, cursor: 'pointer' },
   iconBtn: { height: 28, width: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid transparent', background: 'transparent', borderRadius: 4, cursor: 'pointer', color: 'var(--fg-2)' },
   seg: { display: 'inline-flex', background: 'var(--bg-subtle)', border: '1px solid var(--border-default)', borderRadius: 6, padding: 2, height: 28 },
   segBtn: { display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 10px', border: 0, background: 'transparent', color: 'var(--fg-2)', font: '500 11px/1 Inter', borderRadius: 4, cursor: 'pointer' },

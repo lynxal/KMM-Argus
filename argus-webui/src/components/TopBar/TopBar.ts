@@ -3,6 +3,7 @@ import type { EventStore, View } from '../../store/eventStore';
 import type { EventSource } from '../../transport/eventSource';
 import type { ShortcutBus } from '../../input/keyboard';
 import { createConnDot, createIconEl, createLogoMark } from '../Primitives/Primitives';
+import { createExportMenu } from './ExportMenu';
 import { styles } from './TopBar.styles';
 import { CONN_TONE, VIEW_LABELS } from './TopBar.states';
 
@@ -13,8 +14,8 @@ export interface TopBarProps {
 }
 
 /**
- * Top bar: device info, clear, pause/resume, theme toggle, connection status,
- * view switcher, global search. Buttons emit the same ShortcutActions the
+ * Top bar: device info, export, clear, pause/resume, theme toggle, connection
+ * status, view switcher, global search. Buttons emit the same ShortcutActions the
  * keyboard bus dispatches — shortcut and click are the same path.
  *
  * @see design_handoff_argus_inspector/argus/TopBar.jsx
@@ -113,7 +114,10 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
     store.showCorrelationId.value = !store.showCorrelationId.value;
   });
 
-  bar.append(brand, connPill, viewSwitcher, spacer, search, corrIdBtn, pauseBtn, clearBtn, themeBtn, helpBtn);
+  // Two-option menu: the whole capture, or exactly what the filters leave visible.
+  const exportMenu = createExportMenu({ store, source, bus });
+
+  bar.append(brand, connPill, viewSwitcher, spacer, search, exportMenu, corrIdBtn, pauseBtn, clearBtn, themeBtn, helpBtn);
 
   // Signals → DOM bindings
   effect(() => {

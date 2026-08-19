@@ -1,6 +1,7 @@
 import { signal, type Signal } from '@preact/signals-core';
 import type { EventStore } from '../store/eventStore';
 import type { EventSource } from '../transport/eventSource';
+import { copyText } from '../export/clipboard';
 
 export type ShortcutAction =
   | 'focusSearch'
@@ -178,11 +179,10 @@ export function installKeyboard(
           evt.type === 'HttpEvent'
             ? buildCurl(evt)
             : JSON.stringify(evt, null, 2);
-        void navigator.clipboard.writeText(payload).catch(() => undefined);
-        bus.toast.value = {
-          msg: evt.type === 'HttpEvent' ? 'Copied as cURL' : 'Copied as JSON',
-          at: Date.now(),
-        };
+        const label = evt.type === 'HttpEvent' ? 'Copied as cURL' : 'Copied as JSON';
+        void copyText(payload).then((copied) => {
+          bus.toast.value = { msg: copied ? label : 'Copy failed', at: Date.now() };
+        });
         break;
       }
       case 'undo':
@@ -200,6 +200,12 @@ export function installKeyboard(
     return target.isContentEditable;
   }
 
+  /** True when the user has actually selected text on the page. */
+  function hasTextSelection(): boolean {
+    const sel = window.getSelection();
+    return !!sel && !sel.isCollapsed && sel.toString().trim().length > 0;
+  }
+
   function onKey(e: KeyboardEvent): void {
     const typing = isTypingTarget(e.target);
     for (const b of BINDINGS) {
@@ -207,6 +213,10 @@ export function installKeyboard(
       if (!!b.shift !== e.shiftKey) continue;
       if (!!b.meta !== (e.metaKey || e.ctrlKey)) continue;
       if (typing && b.key !== 'Escape') continue;
+      // Never swallow a copy the user aimed at their own selection — the cURL
+      // block and the raw panes are selectable, and hijacking ⌘C there would
+      // hand back the whole event instead of the highlighted text.
+      if (b.action === 'copySelection' && hasTextSelection()) return;
       e.preventDefault();
       dispatch(b.action);
       return;

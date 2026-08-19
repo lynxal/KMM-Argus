@@ -44,7 +44,7 @@ function Inspector({ initialView='split', initialConn='connected', showFilterPop
     <div ref={containerRef} className={theme === 'dark' ? 'theme-dark' : 'theme-light'} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-app)', position:'relative', overflow:'hidden', color:'var(--fg-1)' }}>
       <TopBar view={view} setView={setView} theme={theme} setTheme={setTheme}
         conn={conn} onCycleConn={cycleConn} paused={paused} onPauseToggle={() => setPaused(p=>!p)}
-        onClear={() => {}} query={query} setQuery={setQuery} onHelp={() => setHelp(true)} />
+        onClear={() => {}} onExport={() => {}} query={query} setQuery={setQuery} onHelp={() => setHelp(true)} />
 
       {(conn === 'reconnecting' || conn === 'disconnected') && <ReconnectingBanner state={conn} />}
 
