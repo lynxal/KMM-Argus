@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.StateFlow
 fun App(
     httpClient: HttpClient,
     argusUrl: StateFlow<String?>,
+    argusError: StateFlow<String?>,
+    argusRunning: StateFlow<Boolean>,
+    onStartArgus: () -> Unit = {},
+    onStopArgus: () -> Unit = {},
     onPublishCustom: () -> Unit = {},
     onOkHttpCall: (String) -> Unit = {},
     onUrlConnectionCall: (String) -> Unit = {},
@@ -18,6 +22,10 @@ fun App(
         SampleScreen(
             httpClient = httpClient,
             argusUrl = argusUrl,
+            argusError = argusError,
+            argusRunning = argusRunning,
+            onStartArgus = onStartArgus,
+            onStopArgus = onStopArgus,
             onPublishCustom = onPublishCustom,
             onOkHttpCall = onOkHttpCall,
             onUrlConnectionCall = onUrlConnectionCall,

@@ -29,6 +29,10 @@ private const val FAILING_URL = "https://this-host-does-not-exist-argus-test.inv
 fun SampleScreen(
     httpClient: HttpClient,
     argusUrl: StateFlow<String?>,
+    argusError: StateFlow<String?>,
+    argusRunning: StateFlow<Boolean>,
+    onStartArgus: () -> Unit = {},
+    onStopArgus: () -> Unit = {},
     onPublishCustom: () -> Unit = {},
     onOkHttpCall: (String) -> Unit = {},
     onUrlConnectionCall: (String) -> Unit = {},
@@ -37,6 +41,8 @@ fun SampleScreen(
     val scope = rememberCoroutineScope()
     val actions = SampleActions(httpClient, scope)
     val url by argusUrl.collectAsState()
+    val error by argusError.collectAsState()
+    val running by argusRunning.collectAsState()
 
     Scaffold { padding ->
         LazyColumn(
@@ -53,14 +59,42 @@ fun SampleScreen(
                 )
             }
 
-            url?.let { bound ->
+            // Always shown, so the inspector's state is never ambiguous — a missing URL on its
+            // own can't tell you whether Argus is stopped, still binding, or failed.
+            item {
+                SelectionContainer {
+                    Text(
+                        text = when {
+                            url != null -> "Argus: $url"
+                            error != null -> "Argus: failed to start"
+                            running -> "Argus: starting…"
+                            else -> "Argus: stopped"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            url != null -> MaterialTheme.colorScheme.onSurface
+                            error != null -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+
+            error?.let { message ->
                 item {
-                    SelectionContainer {
-                        Text(
-                            text = "Argus: $bound",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
+            item {
+                if (running) {
+                    FullWidthButton("Stop Argus") { onStopArgus() }
+                } else {
+                    FullWidthButton("Start Argus") { onStartArgus() }
                 }
             }
 

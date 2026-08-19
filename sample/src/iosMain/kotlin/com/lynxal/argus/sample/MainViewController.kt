@@ -20,10 +20,16 @@ public fun MainViewController(): UIViewController {
     tools.installLogging()
     val httpClient = tools.buildHttpClient()
     val argusUrl = tools.observeArgusUrl()
+    val argusError = tools.observeArgusError()
+    val argusRunning = tools.observeArgusRunning()
     return ComposeUIViewController {
         App(
             httpClient = httpClient,
             argusUrl = argusUrl,
+            argusError = argusError,
+            argusRunning = argusRunning,
+            onStartArgus = tools::startArgus,
+            onStopArgus = tools::stopArgus,
             onPublishCustom = {
                 tools.publishCustom(source = "sample", label = "demo", payload = "{\"hello\":\"argus\"}")
             },
