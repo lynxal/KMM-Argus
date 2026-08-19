@@ -1,5 +1,6 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec.Type.STRING
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+import org.gradle.jvm.tasks.Jar as JvmJar
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -111,7 +112,7 @@ buildkonfig {
 // (JVM, Android variants, and Native all implement KotlinCompilationTask) plus
 // the per-target sourcesJar tasks the publish uses.
 tasks.withType<KotlinCompilationTask<*>>().configureEach { dependsOn(generateBuildKonfigTask) }
-tasks.withType<Jar>().configureEach { dependsOn(generateBuildKonfigTask) }
+tasks.withType<JvmJar>().configureEach { dependsOn(generateBuildKonfigTask) }
 
 mavenPublishing {
     publishToMavenCentral()
