@@ -280,4 +280,7 @@ val verifyIosReleaseHasNoArgus = tasks.register("verifyIosReleaseHasNoArgus") {
 tasks.named("check") {
     dependsOn(verifyReleaseHasNoArgus)
     dependsOn(verifyIosReleaseHasNoArgus)
+    // The root project has no lifecycle-base plugin, so it has no `check` of its
+    // own to hang the version gate off.
+    dependsOn(rootProject.tasks.named("verifyVersionPins"))
 }

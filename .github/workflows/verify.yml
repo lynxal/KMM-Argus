@@ -34,6 +34,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           arguments: >-
+            :verifyVersionPins
             jvmTest
             testDebugUnitTest
             testReleaseUnitTest
