@@ -175,8 +175,17 @@ The iOS reproduction needed the hook recorder to be visible at all — asserting
 `startupError` passes even with the crash present, because the error reaches the handle by a
 separate route. Any future refactor of this area should keep both hook assertions.
 
-Not done: `agent-os/product/tech-stack.md` still describes `expect class ArgusServer`, which no
-longer exists. Left alone — unrelated to this fix and out of scope.
+**Manually verified end to end on device** — the port-conflict path from the bug report, both
+platforms. Confirmed good.
+
+`agent-os/product/tech-stack.md` brought back in line with reality in the same branch. It had
+drifted on more than the `expect class ArgusServer` line originally spotted: publishing was
+described as an internal Lynxal Maven repo when it is Maven Central via the Vanniktech plugin;
+`:argus-okhttp`, `:argus-urlconnection` and `:sample` were missing from the module matrix and the
+dependency-flow diagram; iOS was still written up as future Phase 4 work; SQLDelight persistence in
+`:argus-core` was unmentioned; and versions were vague ("Kotlin 2.x", "coroutines 1.8+"). The
+crash-containment invariant and the `start`/`stop` lifecycle are now recorded under Server-Core,
+since they are architectural properties rather than implementation detail.
 
 ## Follow-up work (same branch)
 
