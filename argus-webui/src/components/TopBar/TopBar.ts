@@ -32,10 +32,19 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
   const wordmark = document.createElement('span');
   wordmark.className = styles.wordmark;
   wordmark.textContent = 'Argus';
+  // Argus library version, from the device's AppInfo.argusVersion, parenthesised and
+  // grouped with the wordmark — "Argus (1.0.0)". The badge parenthesises the host
+  // app's version the same way, so neither number depends on position to be read.
+  // Empty until the hello frame lands, so it never renders "Argus (undefined)".
+  const version = document.createElement('span');
+  version.className = styles.version;
+  const brandName = document.createElement('div');
+  brandName.className = styles.brandName;
+  brandName.append(wordmark, version);
   const appBadge = document.createElement('span');
   appBadge.className = styles.appBadge;
   appBadge.textContent = '—';
-  brand.append(logo, wordmark, appBadge);
+  brand.append(logo, brandName, appBadge);
 
   // Connection pill
   const connPill = document.createElement('div');
@@ -162,17 +171,24 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
     }
   });
 
-  // App identity badge — "<pkg> · <versionName> · <device>" from the server's AppInfo.
+  // App identity badge — "<pkg> · <versionName> · <device>" from the server's AppInfo,
+  // plus the Argus library version next to the wordmark. d.version is the HOST APP's
+  // versionName; d.argusVersion is the library's, generated from argus.version.
   effect(() => {
     const d = source.device.value;
     if (!d) {
       appBadge.textContent = '—';
       appBadge.title = 'Waiting for device info…';
+      version.textContent = '';
+      version.title = '';
       return;
     }
-    const parts = [d.pkg, d.version, d.name].filter((s) => s && s.length > 0);
+    const app = d.version ? `${d.pkg} (${d.version})` : d.pkg;
+    const parts = [app, d.name].filter((s) => s && s.length > 0);
     appBadge.textContent = parts.join(' · ');
     appBadge.title = `${d.pkg} ${d.version} on ${d.name} (${d.address})`;
+    version.textContent = d.argusVersion ? `(${d.argusVersion})` : '';
+    version.title = d.argusVersion ? `Argus library ${d.argusVersion}` : '';
   });
 
   return bar;
