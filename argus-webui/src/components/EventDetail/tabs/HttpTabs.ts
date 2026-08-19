@@ -2,11 +2,12 @@ import type { EventStore } from '../../../store/eventStore';
 import {
   type Header,
   type HttpEvent,
-  isLogEvent,
   statusClass,
 } from '../../../transport/schema';
 import { createBodyViewer } from '../../BodyViewer/BodyViewer';
 import { buildCurl, type ShortcutBus } from '../../../input/keyboard';
+import { redirectChain } from '../../../store/redirects';
+import { relatedLogEvents, RELATED_LOG_WINDOW_MS } from '../../../store/related';
 import {
   STATUS_BUCKET_DOTS,
   STATUS_BUCKET_TEXT,
@@ -25,7 +26,7 @@ export function createHttpTabs({ event, active, store, bus }: HttpTabsProps): HT
   const panel = document.createElement('div');
   panel.className = 'h-full overflow-auto p-3 flex flex-col gap-3';
 
-  panel.appendChild(renderOverview(event));
+  panel.appendChild(renderOverview(event, store));
 
   switch (active) {
     case 'Headers':
@@ -83,7 +84,7 @@ export function createHttpTabs({ event, active, store, bus }: HttpTabsProps): HT
   return panel;
 }
 
-function renderOverview(event: HttpEvent): HTMLElement {
+function renderOverview(event: HttpEvent, store: EventStore): HTMLElement {
   const box = document.createElement('div');
   box.className = 'flex flex-col gap-1';
   const title = document.createElement('div');
@@ -123,6 +124,69 @@ function renderOverview(event: HttpEvent): HTMLElement {
   meta.append(host, dur);
 
   box.append(title, meta);
+
+  // Only for a real chain — a single-hop request gets nothing rather than a
+  // one-row list. Lives in the overview, which renders on every tab, because the
+  // hops are not adjacent in the event list and this is the only place the whole
+  // chain is visible at once.
+  const chain = redirectChain(store.events.value, event);
+  if (chain.length > 1) box.appendChild(renderRedirectChain(event, chain, store));
+
+  return box;
+}
+
+/** Walkable redirect chain: one clickable line per hop, oldest first. */
+function renderRedirectChain(
+  current: HttpEvent,
+  chain: readonly HttpEvent[],
+  store: EventStore,
+): HTMLElement {
+  const box = document.createElement('div');
+  box.className = 'flex flex-col gap-1 mt-1';
+
+  const h = document.createElement('div');
+  h.className = 'text-fg-3 text-xs font-ui uppercase tracking-wider';
+  h.textContent = `Redirect chain · ${chain.length} hops`;
+  box.appendChild(h);
+
+  chain.forEach((hop, i) => {
+    const isCurrent = hop.id === current.id;
+    const line = document.createElement('button');
+    line.type = 'button';
+    line.className = `flex items-center gap-2 px-1 h-6 rounded-sm font-mono text-xs text-left ${
+      isCurrent ? 'bg-bg-subtle text-fg-1' : 'text-fg-2 hover:bg-bg-hover cursor-pointer'
+    }`;
+    line.disabled = isCurrent;
+
+    const index = document.createElement('span');
+    index.className = 'text-fg-3 w-4';
+    index.textContent = String(i + 1);
+
+    const bucket = statusClass(hop.response?.statusCode ?? null);
+    const status = document.createElement('span');
+    status.className = `flex items-center gap-1 ${STATUS_BUCKET_TEXT[bucket]} w-10`;
+    const dot = document.createElement('span');
+    dot.className = `ds-conn-dot ${STATUS_BUCKET_DOTS[bucket]}`;
+    const statusText = document.createElement('span');
+    statusText.textContent = hop.response?.statusCode != null ? String(hop.response.statusCode) : 'ERR';
+    status.append(dot, statusText);
+
+    const target = document.createElement('span');
+    target.className = 'flex-1 truncate';
+    target.textContent = `${hop.request.method.toUpperCase()} ${hop.request.host}${hop.request.path}`;
+
+    const dur = document.createElement('span');
+    dur.className = 'text-fg-3 w-16 text-right tabular-nums';
+    dur.textContent = hop.durationMs != null ? `${hop.durationMs} ms` : '—';
+
+    line.append(index, status, target, dur);
+    line.addEventListener('click', () => {
+      store.selectionSource.value = 'mouse';
+      store.selectedId.value = hop.id;
+    });
+    box.appendChild(line);
+  });
+
   return box;
 }
 
@@ -200,26 +264,39 @@ function legendItem(label: string, color: string): HTMLElement {
 }
 
 function renderRelatedLogs(event: HttpEvent, store: EventStore): HTMLElement {
-  const window = 500; // ± 500ms heuristic as a fallback when correlationId is absent.
-  const center = event.timestamp;
-  const related = store.events.value.filter(
-    (e) => isLogEvent(e) && Math.abs(e.timestamp - center) <= window,
-  );
+  const related = relatedLogEvents(store.events.value, event);
   const box = document.createElement('div');
   box.className = 'flex flex-col gap-1 font-mono text-xs';
-  if (related.length === 0) {
+
+  // State how the match was made: an exact correlationId match and a ±500 ms guess
+  // are very different claims, and the list looks identical either way.
+  const caption = document.createElement('div');
+  caption.className = 'text-fg-3 text-xs font-ui';
+  caption.textContent = related.matchedBy === 'correlationId'
+    ? `Correlation id ${related.correlationId}`
+    : `No correlation id on this call — showing logs within ±${RELATED_LOG_WINDOW_MS} ms`;
+  box.appendChild(caption);
+
+  if (related.logs.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'text-fg-3';
-    empty.textContent = 'No correlated log events within ±500 ms.';
+    empty.textContent = related.matchedBy === 'correlationId'
+      ? 'No log events share this correlation id.'
+      : `No log events within ±${RELATED_LOG_WINDOW_MS} ms.`;
     box.appendChild(empty);
     return box;
   }
-  for (const e of related) {
-    const line = document.createElement('div');
-    line.className = 'text-fg-2 truncate';
-    if (isLogEvent(e)) {
-      line.textContent = `${e.level} [${e.tag ?? ''}] ${e.message}`;
-    }
+
+  for (const e of related.logs) {
+    const line = document.createElement('button');
+    line.type = 'button';
+    line.className =
+      'text-fg-2 truncate text-left px-1 h-5 rounded-sm hover:bg-bg-hover cursor-pointer';
+    line.textContent = `${e.level} [${e.tag ?? ''}] ${e.message}`;
+    line.addEventListener('click', () => {
+      store.selectionSource.value = 'mouse';
+      store.selectedId.value = e.id;
+    });
     box.appendChild(line);
   }
   return box;

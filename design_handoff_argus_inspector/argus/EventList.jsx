@@ -1,5 +1,5 @@
 // EventList.jsx
-function EventList({ events, selectedId, onSelect, selectionMode, containsQuery, density='compact', showJumpToLatest, onJump }) {
+function EventList({ events, selectedId, onSelect, selectionMode, containsQuery, density='compact', showJumpToLatest, onJump, linkedIds = [] }) {
   const rowH = density === 'comfy' ? 36 : 32;
   return (
     <div style={els.root}>
@@ -15,10 +15,18 @@ function EventList({ events, selectedId, onSelect, selectionMode, containsQuery,
       <div style={els.body}>
         {events.map(ev => {
           const sel = selectedId === ev.id;
+          // Linked = a chain-mate of the selection (another hop of the same redirect
+          // chain). Differs from selected on BOTH axes — dashed rail, faint wash —
+          // so the two states can't be confused. The dashed rail is a background
+          // gradient, not a border, so the row's layout doesn't shift.
+          const linked = !sel && linkedIds.includes(ev.id);
           const rowStyle = {
             ...els.row, height: rowH,
-            background: sel ? (selectionMode === 'kb' ? 'var(--bg-selected-kb)' : 'var(--bg-selected)') : 'transparent',
+            background: sel ? (selectionMode === 'kb' ? 'var(--bg-selected-kb)' : 'var(--bg-selected)') : linked ? 'var(--accent-subtle)' : 'transparent',
             boxShadow: sel ? `inset ${selectionMode === 'kb' ? 3 : 2}px 0 0 var(--border-focus)` : 'none',
+            backgroundImage: linked ? 'repeating-linear-gradient(to bottom, var(--border-focus) 0 4px, transparent 4px 8px)' : 'none',
+            backgroundSize: linked ? '2px 100%' : 'auto',
+            backgroundRepeat: 'no-repeat',
           };
           return <Row key={ev.id} ev={ev} sel={sel} style={rowStyle} onClick={() => onSelect(ev.id, 'mouse')} hi={containsQuery} />;
         })}
@@ -51,6 +59,13 @@ function Row({ ev, sel, style, onClick, hi }) {
             {t.label}
           </span>
         </div>
+        {/* Marker for a hop that resulted from a redirect. A label, not a positional
+            glyph: the hops of one chain are not adjacent in the list, so anything
+            reading as "continuation of the row above" would be wrong. The hop it
+            continues is named in the tooltip. */}
+        {ev.redirectedFrom && (
+          <span style={els.redirectPill} title={`continuation of ${ev.redirectedFrom}`}>↳ REDIRECTED</span>
+        )}
         <div style={els.path}>
           <span style={{color:'var(--fg-3)'}}>{highlight(ev.host, hi)}</span>
           <span>{highlight(ev.url, hi)}</span>
@@ -100,6 +115,7 @@ const els = {
   row: { display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', borderBottom: '1px solid var(--border-subtle)', cursor: 'default', font: '400 12px "JetBrains Mono"', color: 'var(--fg-1)' },
   cellSrc: { width: 46, display: 'flex', alignItems: 'center' },
   statusPill: { display: 'inline-flex', alignItems: 'center', gap: 4, height: 18, padding: '0 6px', borderRadius: 3, font: '500 11px/1 "JetBrains Mono"' },
+  redirectPill: { display: 'inline-flex', alignItems: 'center', height: 16, padding: '0 4px', borderRadius: 2, border: '1px solid var(--status-3xx-fg)', color: 'var(--status-3xx-fg)', font: '400 10px/1 "JetBrains Mono"', flex: 'none' },
   path: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg-1)', display:'flex', gap: 2 },
   ts: { width: 82, textAlign: 'right', color: 'var(--fg-3)', font: '400 11px/1 "JetBrains Mono"' },
   num: { width: 58, textAlign: 'right', color: 'var(--fg-2)', font: '400 11px/1 "JetBrains Mono"' },

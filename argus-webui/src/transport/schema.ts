@@ -69,6 +69,16 @@ export interface HttpEvent {
   correlationId?: string | null;
   /** HTTP engine that produced this event ("ktor", "okhttp", "urlconnection"). */
   engine: string;
+  /**
+   * Shared by every hop of one logical request, so a redirect chain reads as one
+   * call. Hops of a chain are NOT adjacent in the stream — unrelated traffic is
+   * emitted between them — so group on this, never on position.
+   *
+   * Ktor only. Null/absent for okhttp and urlconnection, which emit a single
+   * event per logical request, and absent from streams produced by a library
+   * version that predates the field.
+   */
+  requestGroupId?: string | null;
 }
 
 export interface LogEvent {

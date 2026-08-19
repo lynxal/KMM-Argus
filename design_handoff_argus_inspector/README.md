@@ -58,7 +58,9 @@ Two panels, 50/50 split.
     ever wanted in the list, it gets its own headed column, not a unit that changes per row.
   - Primary text: host in `fg-3`, path in `fg-1` (for HTTP); message in `fg-1` with `[tag]` in `fg-3` (for LOG); event name for CUSTOM.
   - Selection: `bg-selected-kb` + 3 px left rail in `border-focus` when selected via keyboard; `bg-selected` + 2 px rail in the same colour when selected via mouse.
-  - Hover (mouse, non-selected): `bg-subtle`. Never applied to the selected row — it would wash the selection tint out from under the cursor that just clicked it.
+  - Linked (related to the selected row — another hop of the same redirect chain, or emitted inside the same correlation scope): `accent-subtle` wash + 2 px **dashed** `border-focus` left rail. See *Selection and linked states* below.
+  - Redirect marker: an HTTP row whose request resulted from a redirect carries a `↳ REDIRECTED` pill in `status-3xx-fg`, styled like the engine chip, placed between the status pill and the primary text. Hover names the hop it continues.
+  - Hover (mouse, non-selected): `bg-subtle`. Never applied to the selected row — it would wash the selection tint out from under the cursor that just clicked it. On a linked row it replaces the wash and leaves the dashed rail.
   - Dividers: 1 px `border-subtle` between rows.
   - Jump-to-latest pill appears bottom-center when new events arrive while scrolled up.
 - **Right: EventDetail.** Tabbed view at the top, content below.
@@ -149,14 +151,34 @@ All of these should work when focus is anywhere except inside a text input:
 | `⌘C` / `Ctrl+C` | Copy currently selected event as cURL (HTTP) or JSON (other) |
 | `⌘Z` | Undo the last destructive action (clear, delete filter) |
 
+### Selection and linked states
+
 Selection style differs by input source:
 
-- **Keyboard selection** → `bg-selected-kb` background + 3 px `border-focus` left rail
-- **Mouse selection** → `bg-selected` background + 2 px `border-focus` left rail
+- **Keyboard selection** → `bg-selected-kb` background + 3 px solid `border-focus` left rail
+- **Mouse selection** → `bg-selected` background + 2 px solid `border-focus` left rail
 
 Both modes get a rail: the background tint alone is too quiet to find at a glance while events stream
 in. The distinction is intentional and lives in the rail's weight plus the stronger keyboard tint —
 the thicker rail tells power users where focus lives; the mouse state is softer.
+
+A third state marks rows **linked** to the selection — the other hops of the selected row's redirect
+chain, plus every event stamped with the same `correlationId` (HTTP calls and log lines alike):
+
+- **Linked** → `accent-subtle` background + 2 px dashed `border-focus` left rail
+
+Linked deliberately differs from selected on *both* axes: dashed rather than solid rail, faint rather
+than strong fill. One axis alone would be ambiguous at a glance while rows stream past, and the two
+states must never be confused. The rail is drawn as a background gradient rather than a border so the
+row's layout doesn't shift, and it survives hover (which only replaces the wash).
+
+Why a linked state exists at all: related events are **not adjacent** in the list — unrelated traffic
+is emitted between them — so the `↳ REDIRECTED` pill alone tells the user a row is a continuation
+without telling them where the other end is, and a correlation scope is invisible entirely unless the
+optional correlation-id column is on. Selecting any event lights up everything related to it wherever
+it sits. The detail pane backs this up with two clickable lists: *Redirect chain* (every hop) and
+*Related Logs* (every log in the same correlation scope, or a ±500 ms window when the call carries no
+correlation id — the tab states which rule it used).
 
 ### Live streaming behavior
 

@@ -1,5 +1,6 @@
 import {
   type ArgusEvent,
+  type HttpEvent,
   isCustomEvent,
   isHttpEvent,
   isLogEvent,
@@ -19,6 +20,13 @@ export interface RowContext {
   readonly selectionSource: 'keyboard' | 'mouse';
   readonly textQuery: string;
   readonly showCorrelationId: boolean;
+  /** Origin hop when this event resulted from a redirect; null otherwise. */
+  readonly redirectOrigin: HttpEvent | null;
+  /**
+   * True when this event is related to the current selection — a hop of the same
+   * redirect chain, or emitted inside the same correlation scope.
+   */
+  readonly linked: boolean;
   readonly onClick: (event: ArgusEvent) => void;
 }
 
@@ -32,6 +40,12 @@ const ROW_CLASS_SELECTED = 'bg-bg-selected';
 const ROW_CLASS_SELECTED_RAIL = 'ds-row-rail';
 const ROW_CLASS_SELECTED_KB = 'bg-bg-selected-kb';
 const ROW_CLASS_SELECTED_KB_RAIL = 'ds-row-rail-kb';
+// Linked (related to the selection — same redirect chain or same correlation scope)
+// differs from selected on BOTH axes: dashed rail instead of solid, faint wash instead
+// of the strong selection tint, so it can never be misread as the selected row. A
+// linked row is by definition not the selection, so the two fills never stack.
+const ROW_CLASS_LINKED = 'bg-accent-subtle';
+const ROW_CLASS_LINKED_RAIL = 'ds-row-linked';
 
 /**
  * Applies (or clears) the selection classes on a row. Every class is toggled in
@@ -50,6 +64,39 @@ export function applyRowSelection(
   row.classList.toggle(ROW_CLASS_SELECTED_RAIL, mouse);
   row.classList.toggle(ROW_CLASS_SELECTED_KB, kb);
   row.classList.toggle(ROW_CLASS_SELECTED_KB_RAIL, kb);
+}
+
+/**
+ * Toggles the linked-row styling. Separate from [applyRowSelection] because
+ * the two are driven by different state, but both are patched onto live pooled rows
+ * for the same reason: the virtual list only rebuilds a row on a pool miss.
+ *
+ * Note `hover:bg-bg-hover` outranks the flat `bg-accent-subtle` (see the hover note
+ * above), so hovering a linked row replaces its wash — the dashed rail survives, and
+ * that's the cue that matters.
+ */
+export function applyRowLinked(row: HTMLElement, linked: boolean): void {
+  row.classList.toggle(ROW_CLASS_LINKED, linked);
+  row.classList.toggle(ROW_CLASS_LINKED_RAIL, linked);
+}
+
+/**
+ * Shows or hides the row's redirect pill and refreshes its tooltip. A hop can be
+ * ingested before the origin it belongs to (a backfill overlapping the live stream),
+ * so this has to be patchable after the row exists rather than decided at build time.
+ */
+export function applyRowRedirect(row: HTMLElement, origin: HttpEvent | null): void {
+  const pill = row.querySelector<HTMLElement>('[data-redirect-pill]');
+  if (!pill) return;
+  // display, not just the `hidden` attribute: the UA's `[hidden] { display: none }`
+  // loses to the pill's own `inline-flex` utility class, so the attribute alone would
+  // leave the pill visible on every HTTP row.
+  pill.hidden = origin == null;
+  pill.style.display = origin == null ? 'none' : '';
+  pill.title = origin
+    ? `continuation of ${origin.request.method.toUpperCase()} ${origin.request.host}${origin.request.path}`
+      + (origin.response ? ` — ${origin.response.statusCode}` : '')
+    : '';
 }
 
 export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement {
@@ -80,6 +127,8 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     statusText.textContent = event.response?.statusCode != null ? String(event.response.statusCode) : 'ERR';
     statusEl.appendChild(statusText);
     row.appendChild(statusEl);
+
+    row.appendChild(createRedirectPill());
 
     const text = document.createElement('span');
     text.className = 'flex-1 font-mono truncate';
@@ -141,8 +190,30 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
 
   row.className = ROW_CLASS_BASE;
   applyRowSelection(row, ctx.selectedId === event.id, ctx.selectionSource);
+  applyRowLinked(row, ctx.linked);
+  applyRowRedirect(row, ctx.redirectOrigin);
   row.addEventListener('click', () => ctx.onClick(event));
   return row;
+}
+
+/**
+ * "Redirected" marker for a hop that resulted from a redirect. Deliberately a
+ * label and not a positional glyph: hops of one chain are not adjacent in the list,
+ * so anything reading as "continuation of the row above" would be wrong. The origin
+ * it continues is named in the tooltip, set by [applyRowRedirect].
+ *
+ * Built on every HTTP row and hidden by default so the state can be patched without
+ * dropping the virtual list's row pool.
+ */
+function createRedirectPill(): HTMLElement {
+  const span = document.createElement('span');
+  span.dataset['redirectPill'] = '';
+  span.hidden = true;
+  span.style.display = 'none';
+  span.className =
+    'inline-flex items-center px-1 h-4 rounded-xs border text-xxs font-mono leading-none text-status-3xx-fg border-status-3xx-fg/30';
+  span.textContent = '↳ REDIRECTED';
+  return span;
 }
 
 function renderHighlighted(host: HTMLElement, text: string, query: string): void {

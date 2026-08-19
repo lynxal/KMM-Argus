@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEventStore } from '../eventStore';
 import type { ArgusEvent } from '../../transport/schema';
 
-function http(id: string, statusCode: number, durationMs: number): ArgusEvent {
+function http(
+  id: string,
+  statusCode: number,
+  durationMs: number,
+  requestGroupId: string | null = null,
+): ArgusEvent {
   return {
     type: 'HttpEvent',
     id,
@@ -11,6 +16,7 @@ function http(id: string, statusCode: number, durationMs: number): ArgusEvent {
     engine: 'ktor',
     durationMs,
     correlationId: null,
+    requestGroupId,
     request: { method: 'GET', url: 'https://h/200', host: 'h', path: '/200', headers: [], body: null },
     response: { statusCode, statusText: '', headers: [], bodyPreview: null, bodyTruncatedTotalBytes: null, contentType: null, sizeBytes: 0 },
     error: null,
@@ -166,5 +172,83 @@ describe('createEventStore', () => {
     expect(store.events.value).toHaveLength(0);
     expect(store.undoClear()).toBe(true);
     expect(store.events.value.map((e) => e.id)).toEqual(['e1', 'e2']);
+  });
+});
+
+function httpWith(id: string, statusCode: number, extra: Record<string, unknown>): ArgusEvent {
+  return { ...http(id, statusCode, 1), ...extra } as unknown as ArgusEvent;
+}
+
+function logWith(id: string, correlationId: string): ArgusEvent {
+  return {
+    type: 'LogEvent',
+    id,
+    timestamp: 1,
+    source: 'LOG',
+    level: 'Info',
+    tag: 't',
+    message: 'm',
+    payload: {},
+    throwable: null,
+    correlationId,
+  } as ArgusEvent;
+}
+
+describe('redirect chains', () => {
+  /** Ingested in arrival order: the 302 hop, an unrelated call, then the 200 hop. */
+  function storeWithChain() {
+    const store = createEventStore({ maxEvents: 100 });
+    store.ingest(http('a', 302, 508, 'g1'));
+    store.ingest(http('unrelated', 200, 42));
+    store.ingest(http('b', 200, 356, 'g1'));
+    return store;
+  }
+
+  it('marks the continuation hop and not the origin', () => {
+    const store = storeWithChain();
+    expect(store.redirectOrigins.value.get('b')?.id).toBe('a');
+    expect(store.redirectOrigins.value.has('a')).toBe(false);
+    expect(store.redirectOrigins.value.has('unrelated')).toBe(false);
+  });
+
+  it('links the chain in both directions, excluding the selection itself', () => {
+    const store = storeWithChain();
+
+    store.selectedId.value = 'a';
+    expect([...store.linkedIds.value]).toEqual(['b']);
+
+    store.selectedId.value = 'b';
+    expect([...store.linkedIds.value]).toEqual(['a']);
+  });
+
+  it('links nothing when there is no selection or the selection has no chain', () => {
+    const store = storeWithChain();
+
+    expect(store.linkedIds.value.size).toBe(0);
+
+    store.selectedId.value = 'unrelated';
+    expect(store.linkedIds.value.size).toBe(0);
+  });
+
+  it('links events sharing a correlationId, in both directions', () => {
+    const store = createEventStore({ maxEvents: 100 });
+    store.ingest(httpWith('call', 200, { correlationId: 'trace-1' }));
+    store.ingest(log(1));
+    store.ingest(logWith('scoped', 'trace-1'));
+
+    store.selectedId.value = 'call';
+    expect([...store.linkedIds.value]).toEqual(['scoped']);
+
+    store.selectedId.value = 'scoped';
+    expect([...store.linkedIds.value]).toEqual(['call']);
+  });
+
+  it('forgets the chain when the list is cleared', () => {
+    const store = storeWithChain();
+    store.selectedId.value = 'b';
+    store.clearLocal();
+
+    expect(store.redirectOrigins.value.size).toBe(0);
+    expect(store.linkedIds.value.size).toBe(0);
   });
 });
