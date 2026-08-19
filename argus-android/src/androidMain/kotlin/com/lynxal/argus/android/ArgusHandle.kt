@@ -47,7 +47,16 @@ public class ArgusHandle internal constructor(
      */
     public val startupError: StateFlow<Throwable?> = _startupError.asStateFlow()
 
+    // A bind that completes after stop() still lands here: server.start() is
+    // non-suspending once it returns, so scope.cancel() cannot preempt the callback,
+    // and stop() spends ~1.1 s draining the engine before it even gets there. Without
+    // this guard a stopped handle republishes url -- breaking the "null after stop"
+    // contract above, so a debug UI shows a live link to a server being torn down --
+    // and logs "listening on" after teardown. That late line is also what makes the
+    // Kotlin/Native test reporter throw "Received output for test that is not
+    // running": the server outlives the test that started it.
     internal fun onStarted() {
+        if (stopped) return
         val ip = LocalIp.firstIPv4() ?: "0.0.0.0"
         val port = server.boundPort
         val bound = "http://$ip:$port"
@@ -59,6 +68,7 @@ public class ArgusHandle internal constructor(
     }
 
     internal fun onFailed(t: Throwable) {
+        if (stopped) return
         _startupError.value = t
         Log.e(LOG_TAG, "Argus start failed", t)
     }
