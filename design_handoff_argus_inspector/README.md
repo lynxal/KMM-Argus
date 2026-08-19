@@ -50,7 +50,12 @@ Top to bottom:
 Two panels, 50/50 split.
 
 - **Left: EventList.** Single column, each row 28 px (compact) or 32 px (comfy).
-  - Row layout: `[SrcBadge] [method or LEVEL] [status pill or —] [primary text, ellipsized] [meta: duration or timestamp]`.
+  - Row layout: `[SrcBadge] [method or LEVEL] [status pill or —] [primary text, ellipsized] [meta: timestamp]`.
+  - The meta cell is the event's wall-clock time for **every** row kind. Call duration is deliberately
+    not in the list: the list has no header row, so one column cannot carry two units without HTTP
+    durations being misread as times — and a timestamp on HTTP rows is what lets a request be lined up
+    against the log lines around it. Duration lives in the HTTP detail pane and the Waterfall. If it is
+    ever wanted in the list, it gets its own headed column, not a unit that changes per row.
   - Primary text: host in `fg-3`, path in `fg-1` (for HTTP); message in `fg-1` with `[tag]` in `fg-3` (for LOG); event name for CUSTOM.
   - Selection: `bg-selected-kb` + 3 px left rail in `border-focus` when selected via keyboard; `bg-selected` + 2 px rail in the same colour when selected via mouse.
   - Hover (mouse, non-selected): `bg-subtle`. Never applied to the selected row — it would wash the selection tint out from under the cursor that just clicked it.

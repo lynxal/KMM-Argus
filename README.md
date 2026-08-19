@@ -632,7 +632,7 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 
 ## 8. UI walkthrough
 
-**Event list.** Single-column stream with source badge (HTTP/LOG/CUSTOM), method or log level, status pill, primary text (host in muted, path in primary), and meta (duration or timestamp). Compact (28 px) and comfy (32 px) row densities. Keyboard navigation moves a 2 px focus rail down the left edge.
+**Event list.** Single-column stream with source badge (HTTP/LOG/CUSTOM), method or log level, status pill, primary text (host in muted, path in primary), and meta (timestamp). Compact (28 px) and comfy (32 px) row densities. Keyboard navigation moves a 2 px focus rail down the left edge.
 
 ![Event list](docs/ui/event-list.png)
 
