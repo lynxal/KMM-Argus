@@ -47,6 +47,46 @@ class ArgusEventSerializationTest {
     }
 
     @Test
+    fun `HttpEvent round-trips requestGroupId`() {
+        val event: ArgusEvent = createTestHttpEvent(requestGroupId = "grp-9f2c31aa")
+
+        val encoded = json.encodeToString<ArgusEvent>(event)
+        val decoded = json.decodeFromString<ArgusEvent>(encoded)
+
+        assertTrue(
+            encoded.contains("\"requestGroupId\":\"grp-9f2c31aa\""),
+            "expected requestGroupId on the wire in: $encoded",
+        )
+        assertEquals(event, decoded)
+    }
+
+    @Test
+    fun `HttpEvent without requestGroupId decodes to null`() {
+        // The field was added at ARGUS_SCHEMA_VERSION 2 without a bump because it is
+        // additive and optional. This is that claim under test: a payload minted by a
+        // library version predating the field still decodes.
+        val payload = """
+            {
+              "type": "HttpEvent",
+              "id": "evt-http-1",
+              "timestamp": 1713103327412,
+              "request": {
+                "method": "GET",
+                "url": "https://api.example.com/v1/users/self",
+                "host": "api.example.com",
+                "path": "/v1/users/self",
+                "headers": []
+              }
+            }
+        """.trimIndent()
+
+        val decoded = json.decodeFromString<ArgusEvent>(payload)
+
+        assertTrue(decoded is HttpEvent)
+        assertEquals(null, decoded.requestGroupId)
+    }
+
+    @Test
     fun `HttpEvent with null response and populated error round-trips`() {
         val event: ArgusEvent = createTestHttpEvent(
             response = null,

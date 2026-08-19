@@ -9,6 +9,19 @@ import type { ArgusEvent, Header, HttpEvent, LogEvent, LogLevel, CustomEvent } f
 const BASE = Date.parse('2026-04-23T14:22:07.000Z');
 const ts = (msOffset: number): number => BASE + msOffset;
 
+/** Matches the X-Trace-Id request header below, as a real correlation id would. */
+const TRACE = 'trace_8821bb';
+
+const STATUS_TEXT: Record<number, string> = {
+  200: 'OK',
+  204: 'No Content',
+  302: 'Found',
+  304: 'Not Modified',
+  401: 'Unauthorized',
+  422: 'Unprocessable Entity',
+  500: 'Internal Server Error',
+};
+
 const REQUEST_HEADERS: Header[] = [
   { name: 'Accept', value: 'application/json, text/plain, */*' },
   { name: 'Accept-Encoding', value: 'gzip, deflate, br' },
@@ -96,20 +109,7 @@ function http(
         ? null
         : {
             statusCode: status,
-            statusText:
-              status === 200
-                ? 'OK'
-                : status === 204
-                  ? 'No Content'
-                  : status === 304
-                    ? 'Not Modified'
-                    : status === 401
-                      ? 'Unauthorized'
-                      : status === 422
-                        ? 'Unprocessable Entity'
-                        : status === 500
-                          ? 'Internal Server Error'
-                          : '',
+            statusText: STATUS_TEXT[status] ?? '',
             headers: RESPONSE_HEADERS,
             bodyPreview: withBody ? ORDER_JSON : null,
             sizeBytes,
@@ -127,6 +127,7 @@ function log(
   tag: string,
   message: string,
   throwable?: LogEvent['throwable'],
+  correlationId: string | null = null,
 ): LogEvent {
   const evt: LogEvent = {
     type: 'LogEvent',
@@ -138,6 +139,7 @@ function log(
     message,
     payload: {},
     throwable: null,
+    correlationId,
   };
   if (throwable !== undefined) {
     evt.throwable = throwable;
@@ -160,12 +162,16 @@ function custom(id: number, offset: number, label: string, payload: string): Cus
 }
 
 export const FIXTURE_EVENTS: ArgusEvent[] = [
-  http(1, 412, 124, 'GET', 200, 'api.example.com', '/v1/users/self', 1820),
-  log(2, 418, 'Info', 'auth', 'Session refreshed · id=9f2c'),
+  // One `withCorrelation { … }` scope: a call plus two log lines, with unrelated
+  // events between them. Non-adjacency is the point here too.
+  http(1, 412, 124, 'GET', 200, 'api.example.com', '/v1/users/self', 1820, {
+    correlationId: TRACE,
+  }),
+  log(2, 418, 'Info', 'auth', 'Session refreshed · id=9f2c', undefined, TRACE),
   http(3, 520, 312, 'POST', 204, 'api.example.com', '/v1/events/batch', 4096),
   http(4, 802, 186, 'GET', 200, 'api.example.com', '/v1/orders?page=2&status=paid', 12480),
   custom(5, 850, 'cart.item_added', 'sku=SKU-8821 · qty=2 · price=24.50'),
-  log(6, 960, 'Debug', 'cache', 'Cache hit · key=user/9f2c · ttl=285s'),
+  log(6, 960, 'Debug', 'cache', 'Cache hit · key=user/9f2c · ttl=285s', undefined, TRACE),
   http(7, 1012, 89, 'POST', 401, 'auth.example.com', '/v1/auth/refresh', 312),
   log(8, 1140, 'Warning', 'publisher', 'Retrying publish after 2 failed attempts'),
   http(9, 1200, 42, 'GET', 304, 'api.example.com', '/v1/config', 0),
@@ -184,6 +190,16 @@ export const FIXTURE_EVENTS: ArgusEvent[] = [
   http(12, 2010, 94, 'PATCH', 200, 'api.example.com', '/v1/users/self/prefs', 412),
   custom(13, 2120, 'analytics.page_view', 'path=/checkout · ref=/cart'),
   http(14, 2300, 76, 'GET', 200, 'api.example.com', '/v1/products/SKU-8821', 2048),
+  // Redirect chain: two hops of one logical request sharing a requestGroupId, with
+  // an unrelated call emitted between them. Non-adjacency is the point — it's the
+  // real shape of a chain in the stream and what the linked-row highlight exists for.
+  http(18, 2360, 508, 'GET', 302, 'picsum.photos', '/200', 0, {
+    requestGroupId: 'grp_redirect_1',
+  }),
+  log(19, 2400, 'Debug', 'images', 'Following redirect · picsum.photos/200'),
+  http(20, 2440, 356, 'GET', 200, 'fastly.picsum.photos', '/id/237/200/200.jpg', 18944, {
+    requestGroupId: 'grp_redirect_1',
+  }),
   http(15, 2520, 110, 'PUT', 422, 'api.example.com', '/v1/cart/items/a12', 240),
   log(16, 2900, 'Verbose', 'sched', 'Tick · scheduler=events · queue=0'),
   http(17, 3100, null, 'OPTIONS', null, 'realtime.example.com', '/v1/stream', 0, {

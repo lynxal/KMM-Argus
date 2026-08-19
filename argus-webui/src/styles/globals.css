@@ -549,6 +549,22 @@ kbd.ds-kbd {
   box-shadow: inset 3px 0 0 0 var(--border-focus);
 }
 
+/* Linked row — a chain-mate of the selected event (another hop of the same redirect
+   chain). Dashed rail rather than the selection's solid one, paired with a faint
+   accent-subtle wash rather than the strong selection tint, so linked differs from
+   selected on both axes and can never be misread as the selection. Drawn as a
+   background gradient because the rails use box-shadow and a real border would
+   shift the row's layout. */
+.ds-row-linked {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--border-focus) 0 4px,
+    transparent 4px 8px
+  );
+  background-size: 2px 100%;
+  background-repeat: no-repeat;
+}
+
 /* Modal presets — widths match the handoff specs. */
 .ds-modal-shortcuts {
   width: 560px;

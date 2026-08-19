@@ -278,7 +278,11 @@ private fun emitSuccess(
     // The id is minted per emitted event, not per request: every hop of a redirect
     // inherits the request attributes, so an id stored there would be shared by all of
     // them and consumers keyed by id (the webui's list rows) would collide.
-    if (attrs.getOrNull(ArgusIdKey) == null) return
+    //
+    // That inheritance is what makes ArgusIdKey a per-logical-request handle, so it is
+    // published as `requestGroupId` — the thing that ties a redirect chain's hops back
+    // together now that each one is its own event.
+    val groupId = attrs.getOrNull(ArgusIdKey) ?: return
     val id = Uuid.random().toString()
     val snapshot = attrs.getOrNull(ArgusRequestSnapshotKey) ?: return
     val startMs = attrs.getOrNull(ArgusStartMsKey) ?: return
@@ -305,6 +309,7 @@ private fun emitSuccess(
             durationMs = durationMs,
             correlationId = attrs.getOrNull(ArgusCorrelationKey),
             engine = "ktor",
+            requestGroupId = groupId,
         ),
     )
 }
@@ -319,7 +324,7 @@ private fun emitError(
     if (attrs.getOrNull(ArgusEmittedKey) == true) return
     attrs.put(ArgusEmittedKey, true)
 
-    if (attrs.getOrNull(ArgusIdKey) == null) return
+    val groupId = attrs.getOrNull(ArgusIdKey) ?: return
     val id = Uuid.random().toString()
     val snapshot = attrs.getOrNull(ArgusRequestSnapshotKey) ?: return
     val startMs = attrs.getOrNull(ArgusStartMsKey) ?: return
@@ -335,6 +340,7 @@ private fun emitError(
             durationMs = durationMs,
             correlationId = attrs.getOrNull(ArgusCorrelationKey),
             engine = "ktor",
+            requestGroupId = groupId,
         ),
     )
 }
@@ -348,7 +354,7 @@ private fun emitNetworkError(
     if (attrs.getOrNull(ArgusEmittedKey) == true) return
     attrs.put(ArgusEmittedKey, true)
 
-    if (attrs.getOrNull(ArgusIdKey) == null) return
+    val groupId = attrs.getOrNull(ArgusIdKey) ?: return
     val id = Uuid.random().toString()
     val snapshot = attrs.getOrNull(ArgusRequestSnapshotKey) ?: return
     val startMs = attrs.getOrNull(ArgusStartMsKey) ?: return
@@ -364,6 +370,7 @@ private fun emitNetworkError(
             durationMs = durationMs,
             correlationId = attrs.getOrNull(ArgusCorrelationKey),
             engine = "ktor",
+            requestGroupId = groupId,
         ),
     )
 }

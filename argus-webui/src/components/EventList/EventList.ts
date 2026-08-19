@@ -2,7 +2,7 @@ import { effect, signal } from '@preact/signals-core';
 import type { EventStore } from '../../store/eventStore';
 import type { ArgusEvent } from '../../transport/schema';
 import { createVirtualList } from './virtual';
-import { applyRowSelection, createEventRow } from './Row';
+import { applyRowLinked, applyRowRedirect, applyRowSelection, createEventRow } from './Row';
 import { unseenCount } from './EventList.states';
 import { createIconEl } from '../Primitives/Primitives';
 
@@ -39,6 +39,8 @@ export function createEventList({ store }: EventListProps): HTMLElement {
         selectionSource: store.selectionSource.peek(),
         textQuery: store.filters.peek().textQuery,
         showCorrelationId: store.showCorrelationId.peek(),
+        redirectOrigin: store.redirectOrigins.peek().get(event.id) ?? null,
+        linked: store.linkedIds.peek().has(event.id),
         onClick: (e) => {
           store.selectionSource.value = 'mouse';
           store.selectedId.value = e.id;
@@ -106,15 +108,30 @@ export function createEventList({ store }: EventListProps): HTMLElement {
   effect(() => {
     const id = store.selectedId.value;
     const source = store.selectionSource.value;
+    const linked = store.linkedIds.value;
     for (const child of Array.from(list.innerContent.children)) {
       const row = child as HTMLElement;
-      applyRowSelection(row, id != null && row.dataset['eventId'] === id, source);
+      const rowId = row.dataset['eventId'];
+      applyRowSelection(row, id != null && rowId === id, source);
+      applyRowLinked(row, rowId != null && linked.has(rowId));
     }
     // Keyboard nav can walk the selection past either edge of the viewport;
     // mouse selection is by definition already visible, so leave scroll alone.
     if (id != null && source === 'keyboard') {
       const idx = store.filteredEvents.peek().findIndex((e) => e.id === id);
       if (idx >= 0) list.scrollIndexIntoView(idx);
+    }
+  });
+
+  // Redirect pills are patched, not rebuilt: a hop can be ingested before the origin
+  // it belongs to (a backfill overlapping the live stream), and dropping the pool on
+  // every ingested event would rebuild the whole window each time one arrives.
+  effect(() => {
+    const origins = store.redirectOrigins.value;
+    for (const child of Array.from(list.innerContent.children)) {
+      const row = child as HTMLElement;
+      const rowId = row.dataset['eventId'];
+      applyRowRedirect(row, rowId != null ? origins.get(rowId) ?? null : null);
     }
   });
 

@@ -1,8 +1,10 @@
 import { computed, effect, signal, type Signal } from '@preact/signals-core';
-import type { ArgusEvent } from '../transport/schema';
+import type { ArgusEvent, HttpEvent } from '../transport/schema';
 import type { EventSource } from '../transport/eventSource';
 import { applyFilters, cloneFilters, DEFAULT_FILTERS, type Filters } from './filters';
 import { loadJson, loadString, saveJson, saveString } from './persistence';
+import { buildRedirectOrigins } from './redirects';
+import { linkedEventIds } from './related';
 
 /** Ring-buffer cap. README default; configurable at store creation. */
 export const DEFAULT_MAX_EVENTS = 10_000;
@@ -23,6 +25,18 @@ export interface EventStore {
   readonly events: Signal<ArgusEvent[]>;
   readonly pausedBuffer: Signal<ArgusEvent[]>;
   readonly filteredEvents: Signal<ArgusEvent[]>;
+
+  /**
+   * Continuation hop id → the origin hop of its redirect chain. Derived from the
+   * unfiltered list on purpose: a hop stays marked as redirected even when the 3xx
+   * that produced it is filtered out, which is the informative behaviour.
+   */
+  readonly redirectOrigins: Signal<ReadonlyMap<string, HttpEvent>>;
+  /**
+   * Events related to the current selection — redirect chain-mates plus anything
+   * sharing its correlationId — excluding the selection itself.
+   */
+  readonly linkedIds: Signal<ReadonlySet<string>>;
 
   readonly paused: Signal<boolean>;
   readonly view: Signal<View>;
@@ -90,23 +104,27 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
 
   const filteredEvents = computed(() => applyFilters(events.value, filters.value));
 
+  // Derived rather than maintained incrementally, so replace-in-place, ring-buffer
+  // eviction, clearLocal and undoClear all stay correct with no extra bookkeeping.
+  const redirectOrigins = computed(() => buildRedirectOrigins(events.value));
+  const linkedIds = computed(() => linkedEventIds(events.value, selectedId.value));
+
   // Undo snapshot for Shift+X clear. Expires on next write.
   let lastClearSnapshot: readonly ArgusEvent[] | null = null;
   let lastClearAt = 0;
   const UNDO_WINDOW_MS = 6_000;
 
   // Ids currently held by `events` + `pausedBuffer`. One id can arrive more than
-  // once: a redirected Ktor request emits one event per hop and every hop carries
-  // the id minted for the first one, so a 302 followed by a 200 shows up as two
-  // events sharing an id. The backfill GET overlapping the live WS stream does the
-  // same. Two entries with one id rendered as two rows, both highlighted, and
-  // keyboard nav (which resolves the selection with findIndex) jumped back to the
-  // first copy.
+  // once when the backfill GET overlaps the live WS stream, and against an older
+  // library version that minted one id per request instead of per hop, where a
+  // redirect's 302 and 200 arrive under the same id. Two entries with one id
+  // rendered as two rows, both highlighted, and keyboard nav (which resolves the
+  // selection with findIndex) jumped back to the first copy.
   //
   // The repeat REPLACES the entry it collides with, in place, rather than being
-  // dropped: for a redirect chain the later hop is the meaningful one (the real
-  // status and body), and for a re-delivered event the two copies are identical
-  // so replacing is a no-op. Keeping the position stops rows from jumping.
+  // dropped: a re-delivered event's two copies are identical so replacing is a
+  // no-op, and on the old-library path the later hop is the meaningful one (the
+  // real status and body). Keeping the position stops rows from jumping.
   const seenIds = new Set<string>();
 
   /** Forget ids that fell off the front of a capped list so the set can't grow unbounded. */
@@ -230,6 +248,8 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     events,
     pausedBuffer,
     filteredEvents,
+    redirectOrigins,
+    linkedIds,
     paused,
     view,
     theme,
