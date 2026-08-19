@@ -11,7 +11,7 @@ Argus is a Kotlin Multiplatform library that embeds a Ktor HTTP+WebSocket server
 - **Package root:** `com.lynxal.argus` — subpackages follow `naming/package-structure` (singular folder names, one top-level declaration per file).
 - **JVM target:** 17 (aligned with `kmp/module-build-conventions`).
 - **Android min SDK:** **24.** *Divergence from `kmp/module-build-conventions` (which sets minSdk = 26).* Argus is a debug-only library consumed by third-party Canvas/Lynxal apps, so it needs a broader min SDK reach than the Canvas Control app itself.
-- **Version source:** a single `argus.version` property in root `gradle.properties` (currently `0.0.3`), consumed by every module's `coordinates(…)`. Do not hard-code versions per module. `-Pargus.localSnapshot=true` appends `-SNAPSHOT` for `publishToMavenLocal`.
+- **Version source:** a single `argus.version` property in root `gradle.properties`, consumed by every module's `coordinates(…)` and stamped into the runtime constant by `:argus-core:generateArgusVersion`. Do not hard-code versions per module — `:verifyVersionPins` fails the build on drift. `-Pargus.localSnapshot=true` appends `-SNAPSHOT` for `publishToMavenLocal`.
 - **Versioning:** **Semver (`x.y.z`).** *Divergence from `kmp/version-management` (which uses `{major}.{minor}.{buildId}` with `System.currentTimeMillis()`).* Argus is distributed as a library on Maven Central; consumers pin and range on semver. Wire compatibility is tracked separately as `schemaVersion` in the WebSocket hello payload.
 - **Publishing:** **Maven Central**, via the Vanniktech Maven Publish plugin (`0.33.0`) under the `com.lynxal.argus` group. Released by the manually-triggered `publishToMavenCentral.yml` workflow.
 

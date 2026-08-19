@@ -18,7 +18,7 @@ In practice, that means: in-app debug tooling for Kotlin Multiplatform apps. Arg
 
 | Attribute | Value |
 |---|---|
-| Version | `0.0.2` |
+| Version | `1.0.0` |
 | Platforms | Android, iOS (Ktor-host apps) |
 | `minSdk` | 24 |
 | `compileSdk` / `targetSdk` | 36 |
@@ -46,8 +46,8 @@ Every code block below is copied verbatim from [`:sample`](./sample), which is g
 
 ```kotlin
 dependencies {
-    debugImplementation("com.lynxal.argus:argus-android:0.0.2")
-    // stagingImplementation("com.lynxal.argus:argus-android:0.0.2") // optional, see §5
+    debugImplementation("com.lynxal.argus:argus-android:1.0.0")
+    // stagingImplementation("com.lynxal.argus:argus-android:1.0.0") // optional, see §5
 }
 ```
 
@@ -334,7 +334,7 @@ The iOS seam works the same way as Android (interface in shared code, real impl 
 
 If your iOS app does **not** use Kotlin Multiplatform, consume Argus as an XCFramework via SPM:
 
-1. In Xcode: **File → Add Packages…** and enter `https://github.com/lynxal/argus`.
+1. In Xcode: **File → Add Packages…** and enter `https://github.com/lynxal/KMM-Argus`.
 2. Select **Up to next major version** and add the `ArgusIOS` library to your debug app target.
 3. SPM has no native build-config gating, so the binary is the same in debug and release. Wrap your usage in `#if DEBUG` (or split debug/release schemes) so the released app does not link Argus:
 
@@ -348,7 +348,7 @@ let handle = Argus.shared.start { config in
 #endif
 ```
 
-The XCFramework is built by Gradle (`./gradlew :argus-ios:assembleArgus-iosReleaseXCFramework`) and published as a release asset on each Argus release. KMP-based apps should keep using `implementation("com.lynxal.argus:argus-ios:0.0.2")` from Maven Central — the steps below describe that path.
+The XCFramework is built by Gradle (`./gradlew :argus-ios:assembleArgus-iosReleaseXCFramework`) and published as a release asset on each Argus release. KMP-based apps should keep using `implementation("com.lynxal.argus:argus-ios:1.0.0")` from Maven Central — the steps below describe that path.
 
 ### Step 1 — Add iOS targets to your KMP module + Xcode build-phase script
 
@@ -591,7 +591,7 @@ It runs `xcodebuild -configuration Release -destination 'generic/platform=iOS Si
 Argus does not define a `staging` build type — that's a consumer concern. If your app has a staging variant and you want Argus there too:
 
 1. Add a `staging` build type in your `app/build.gradle.kts` (typically `initWith debug`).
-2. Add the dependency: `stagingImplementation("com.lynxal.argus:argus-android:0.0.2")`.
+2. Add the dependency: `stagingImplementation("com.lynxal.argus:argus-android:1.0.0")`.
 3. Create `src/staging/kotlin/.../debug/DebugToolsImpl.kt` mirroring the debug source-set impl from §4.
 
 The same source-set seam pattern works for any number of variants. What it never does is leak Argus into `release`.
@@ -776,7 +776,7 @@ These options live on each engine's plugin/interceptor config: Ktor `install(Arg
 **Android:**
 
 ```bash
-git clone https://github.com/lynxal/argus.git
+git clone https://github.com/lynxal/KMM-Argus.git
 cd argus
 ./gradlew :sample:installDebug
 ```
@@ -827,13 +827,13 @@ flowchart LR
 
 | Module | Coordinates | Purpose |
 |---|---|---|
-| `argus-core` | `com.lynxal.argus:argus-core:0.0.2` | Shared model, `ArgusClientPlugin` (Ktor capture), event bus, redaction. |
-| `argus-server-core` | `com.lynxal.argus:argus-server-core:0.0.2` | Embedded Ktor server: REST + WebSocket endpoints, event dispatcher, `ArgusConfig`. |
-| `argus-webui-bundle` | `com.lynxal.argus:argus-webui-bundle:0.0.2` | Pre-built SPA shipped as a JVM resource the server statically serves. |
-| `argus-android` | `com.lynxal.argus:argus-android:0.0.2` | Android entry point: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. |
-| `argus-ios` | `com.lynxal.argus:argus-ios:0.0.2` | iOS entry point for Apple targets: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. Also published as an XCFramework via Swift Package Manager (see §5). |
-| `argus-okhttp` | `com.lynxal.argus:argus-okhttp:0.0.2` | OkHttp `Interceptor` capture for non-Ktor JVM HTTP. |
-| `argus-urlconnection` | `com.lynxal.argus:argus-urlconnection:0.0.2` | `HttpURLConnection` capture wrapper for legacy JVM HTTP. |
+| `argus-core` | `com.lynxal.argus:argus-core:1.0.0` | Shared model, `ArgusClientPlugin` (Ktor capture), event bus, redaction. |
+| `argus-server-core` | `com.lynxal.argus:argus-server-core:1.0.0` | Embedded Ktor server: REST + WebSocket endpoints, event dispatcher, `ArgusConfig`. |
+| `argus-webui-bundle` | `com.lynxal.argus:argus-webui-bundle:1.0.0` | Pre-built SPA shipped as a JVM resource the server statically serves. |
+| `argus-android` | `com.lynxal.argus:argus-android:1.0.0` | Android entry point: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. |
+| `argus-ios` | `com.lynxal.argus:argus-ios:1.0.0` | iOS entry point for Apple targets: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. Also published as an XCFramework via Swift Package Manager (see §5). |
+| `argus-okhttp` | `com.lynxal.argus:argus-okhttp:1.0.0` | OkHttp `Interceptor` capture for non-Ktor JVM HTTP. |
+| `argus-urlconnection` | `com.lynxal.argus:argus-urlconnection:1.0.0` | `HttpURLConnection` capture wrapper for legacy JVM HTTP. |
 
 **Why debug-only?** See [§3](#3-debug-only-distribution-model). The summary: the embedded server is a production-grade attack surface, and the seam-pattern source-set split (with the `verifyReleaseHasNoArgus` CI gate) is the only integration shape we support. There is no no-op artifact, by design — a missing release-side `DebugToolsImpl` is a build error, which is the desired failure mode.
 
@@ -862,4 +862,4 @@ If anything appears, you have an `implementation`, `api`, or `releaseImplementat
 
 Issues and pull requests are welcome via GitHub. There is no `CONTRIBUTING.md` yet — the short version: fork, branch, run `./gradlew check :sample:verifyReleaseHasNoArgus`, open a PR.
 
-License: not yet declared. A `LICENSE` file will land before `1.0.0`.
+License: [MIT](LICENSE) — matching the `licenses` block every module's POM publishes to Maven Central.
