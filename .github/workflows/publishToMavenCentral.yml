@@ -8,9 +8,10 @@ on:
   release:
     types: [released]
 
-# Publication runs without a test gate — the Verify (JVM/Android) workflow on
-# main is responsible for catching regressions, and Verify (iOS/Mac) covers
-# the Apple side on demand. Run both before tagging a release.
+# Publication runs without a test gate. Both Verify workflows are
+# workflow_dispatch on main (Verify (JVM/Android) also runs on every PR), so
+# neither fires automatically at release time — dispatch both against main
+# before tagging a release.
 jobs:
   publish:
     runs-on: macos-latest
