@@ -33,7 +33,7 @@ Top to bottom:
      - `reconnecting` — amber dot, pulsing (`argusPulse` keyframe, 1.2s)
      - `disconnected` — red dot
    - Center: view switcher — segmented control with three options (List / Split / Waterfall). Selected segment: `bg-panel`, subtle shadow, `fg-1`. Unselected: `fg-2`.
-   - Right side (left-to-right): global search (`/` to focus, 240 px wide, monospace placeholder), pause button (toggles to resume icon when paused), clear button, theme toggle, help button (`?`).
+   - Right side (left-to-right): global search (`/` to focus, 240 px wide, monospace placeholder), "Export" button (textual CTA, 24 px, `bg-subtle`; writes every captured event to one JSON file, ignoring the active filters), correlation-id column toggle, pause button (toggles to resume icon when paused), clear button, theme toggle, help button (`?`).
 2. **Connection banner** — only visible when `conn !== 'connected'`. 32 px tall, full-width, tinted by state (amber for reconnecting, red for disconnected). Contains icon, message, last-seen timestamp, retry countdown, "Retry now" button.
 3. **FilterBar** — 36 px tall, `bg-panel`, `border-default` bottom.
    - Source toggles: HTTP / LOG / CUSTOM as filled chips. Active = source's tinted background; inactive = `bg-subtle` with muted text.
@@ -112,11 +112,13 @@ Two-column grid of sections (Navigate / Search & filter / Capture / Views / Help
 
 ### Toast
 
-Bottom-center, 32 px tall, `bg-overlay`, `shadow-md`, `border-default`, 6 px radius. Check icon (in `--conn-ok-fg`) + message + undo hint (`⌘ Z`). Auto-dismiss after ~3s. Used for: "Copied as cURL", "Copied request body", "Filter cleared", etc.
+Bottom-center, 32 px tall, `bg-overlay`, `shadow-md`, `border-default`, 6 px radius. Check icon (in `--conn-ok-fg`) + message + undo hint (`⌘ Z`). Auto-dismiss after ~3s. Used for: "Copied as cURL", "Exported 142 events", "Downloaded argus-log-….json", "Filter cleared", etc.
 
 ### Body viewer variants
 
-The BodyViewer lives in the Request/Response tabs but also appears in LOG context and CUSTOM payload tabs. Toolbar at the top (24 px): format badge (JSON/TEXT/IMAGE/HEX/EMPTY) · size · mime type · wrap toggle · copy button · download button.
+The BodyViewer lives in the Request/Response tabs but also appears in LOG context and CUSTOM payload tabs. Toolbar at the top (24 px): format badge (JSON/TEXT/IMAGE/HEX/EMPTY) · size · mime type · wrap toggle · right-aligned "Download" button (textual, not an icon).
+
+The Download button saves exactly what the pane shows — the whole event JSON on a Raw tab, the body on a Request/Response tab. Image bodies are written as bytes, not as the base64 the viewer renders. A body that was truncated at capture still downloads, because the missing bytes never reach the browser at all; the filename gains a `-truncated` marker and the toast names both byte counts so a partial payload cannot be mistaken for a whole one. There is no Copy button here — copying is served by `⌘C` (selected event as JSON) and the "Copy as cURL" button on the Request tab.
 
 - **JSON tree**: collapsible tree with disclosure arrows. Keys in `fg-1`, strings in green-ish (`--json-string`), numbers in blue-ish (`--json-number`), booleans/null in purple-ish (`--json-bool`). Hover shows path breadcrumb at bottom.
 - **JSON truncated**: same as above but with a dashed divider and a "Body truncated at 512 KB — Load full body" chip. Keeps the viewer responsive.

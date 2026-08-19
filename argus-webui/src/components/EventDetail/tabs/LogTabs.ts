@@ -1,6 +1,7 @@
 import type { LogEvent } from '../../../transport/schema';
 import { LOG_LEVEL_LABELS } from '../../../transport/schema';
 import { createBodyViewer } from '../../BodyViewer/BodyViewer';
+import type { ShortcutBus } from '../../../input/keyboard';
 import { LEVEL_TONES } from '../../FilterBar/FilterBar.states';
 
 export const LOG_TABS = ['Message', 'Payload', 'Stack Trace', 'Raw'] as const;
@@ -8,9 +9,10 @@ export const LOG_TABS = ['Message', 'Payload', 'Stack Trace', 'Raw'] as const;
 export interface LogTabsProps {
   readonly event: LogEvent;
   readonly active: string;
+  readonly bus: ShortcutBus;
 }
 
-export function createLogTabs({ event, active }: LogTabsProps): HTMLElement {
+export function createLogTabs({ event, active, bus }: LogTabsProps): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'h-full overflow-auto p-3 flex flex-col gap-3';
 
@@ -59,7 +61,13 @@ export function createLogTabs({ event, active }: LogTabsProps): HTMLElement {
     }
     case 'Raw':
       panel.appendChild(
-        createBodyViewer({ mode: 'json', body: JSON.stringify(event, null, 2), contentType: 'application/json' }),
+        createBodyViewer({
+          mode: 'json',
+          body: JSON.stringify(event, null, 2),
+          contentType: 'application/json',
+          downloadName: `argus-log-${event.id}-raw`,
+          bus,
+        }),
       );
       break;
   }

@@ -6,7 +6,7 @@ import {
   statusClass,
 } from '../../../transport/schema';
 import { createBodyViewer } from '../../BodyViewer/BodyViewer';
-import { buildCurl } from '../../../input/keyboard';
+import { buildCurl, type ShortcutBus } from '../../../input/keyboard';
 import {
   STATUS_BUCKET_DOTS,
   STATUS_BUCKET_TEXT,
@@ -18,9 +18,10 @@ export interface HttpTabsProps {
   readonly event: HttpEvent;
   readonly active: string;
   readonly store: EventStore;
+  readonly bus: ShortcutBus;
 }
 
-export function createHttpTabs({ event, active, store }: HttpTabsProps): HTMLElement {
+export function createHttpTabs({ event, active, store, bus }: HttpTabsProps): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'h-full overflow-auto p-3 flex flex-col gap-3';
 
@@ -38,6 +39,8 @@ export function createHttpTabs({ event, active, store }: HttpTabsProps): HTMLEle
           contentType: event.request.contentType,
           sizeBytes: event.request.sizeBytes,
           truncatedTotalBytes: event.request.bodyTruncatedTotalBytes,
+          downloadName: `argus-http-${event.id}-request`,
+          bus,
         }),
       );
       panel.appendChild(copyCurlRow(event));
@@ -50,6 +53,8 @@ export function createHttpTabs({ event, active, store }: HttpTabsProps): HTMLEle
             contentType: event.response.contentType,
             sizeBytes: event.response.sizeBytes,
             truncatedTotalBytes: event.response.bodyTruncatedTotalBytes,
+            downloadName: `argus-http-${event.id}-response`,
+            bus,
           }),
         );
       } else {
@@ -64,7 +69,13 @@ export function createHttpTabs({ event, active, store }: HttpTabsProps): HTMLEle
       break;
     case 'Raw':
       panel.appendChild(
-        createBodyViewer({ mode: 'json', body: JSON.stringify(event, null, 2), contentType: 'application/json' }),
+        createBodyViewer({
+          mode: 'json',
+          body: JSON.stringify(event, null, 2),
+          contentType: 'application/json',
+          downloadName: `argus-http-${event.id}-raw`,
+          bus,
+        }),
       );
       break;
   }

@@ -1,15 +1,17 @@
 import type { CustomEvent as ArgusCustomEvent } from '../../../transport/schema';
 import { createBodyViewer } from '../../BodyViewer/BodyViewer';
+import type { ShortcutBus } from '../../../input/keyboard';
 
 export const CUSTOM_TABS = ['Payload', 'Metadata', 'Raw'] as const;
 
 export interface CustomTabsProps {
   readonly event: ArgusCustomEvent;
   readonly active: string;
+  readonly bus: ShortcutBus;
 }
 
 /** Deliberately minimal. */
-export function createCustomTabs({ event, active }: CustomTabsProps): HTMLElement {
+export function createCustomTabs({ event, active, bus }: CustomTabsProps): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'h-full overflow-auto p-3 flex flex-col gap-3';
 
@@ -23,7 +25,14 @@ export function createCustomTabs({ event, active }: CustomTabsProps): HTMLElemen
 
   switch (active) {
     case 'Payload':
-      panel.appendChild(createBodyViewer({ mode: 'auto', body: event.payload }));
+      panel.appendChild(
+        createBodyViewer({
+          mode: 'auto',
+          body: event.payload,
+          downloadName: `argus-custom-${event.id}-payload`,
+          bus,
+        }),
+      );
       break;
     case 'Metadata': {
       if (Object.keys(event.metadata).length === 0) {
@@ -49,7 +58,13 @@ export function createCustomTabs({ event, active }: CustomTabsProps): HTMLElemen
     }
     case 'Raw':
       panel.appendChild(
-        createBodyViewer({ mode: 'json', body: JSON.stringify(event, null, 2), contentType: 'application/json' }),
+        createBodyViewer({
+          mode: 'json',
+          body: JSON.stringify(event, null, 2),
+          contentType: 'application/json',
+          downloadName: `argus-custom-${event.id}-raw`,
+          bus,
+        }),
       );
       break;
   }

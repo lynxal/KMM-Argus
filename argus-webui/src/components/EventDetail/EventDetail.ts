@@ -67,9 +67,9 @@ export function createEventDetail({ store, bus }: EventDetailProps): HTMLElement
 
     const active = store.detailTab.value[kind];
     content.innerHTML = '';
-    if (isHttpEvent(evt)) content.appendChild(createHttpTabs({ event: evt, active, store }));
-    else if (isLogEvent(evt)) content.appendChild(createLogTabs({ event: evt, active }));
-    else if (isCustomEvent(evt)) content.appendChild(createCustomTabs({ event: evt, active }));
+    if (isHttpEvent(evt)) content.appendChild(createHttpTabs({ event: evt, active, store, bus }));
+    else if (isLogEvent(evt)) content.appendChild(createLogTabs({ event: evt, active, bus }));
+    else if (isCustomEvent(evt)) content.appendChild(createCustomTabs({ event: evt, active, bus }));
   }
 
   // Tab cycling via [ / ] shortcuts. Rotates the active tab for the kind of
