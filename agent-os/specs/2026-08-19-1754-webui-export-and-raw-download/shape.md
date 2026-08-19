@@ -65,9 +65,15 @@ Ships:
   re-ingesting `.events` still round-trips, and the file becomes self-describing — which device, which
   app version, which schema — which is what makes it useful attached to a ticket. **This is a
   deliberate deviation from the issue text.**
-- **Chronological order in the file.** `store.events` is newest-first (`eventStore.ts:157` prepends);
-  the export reverses to oldest-first so it reads like a log. Re-ingest still lands newest-first
-  because `ingest` prepends.
+- **Chronological order in the file, taken from the store rather than imposed.** Originally the export
+  reversed the array, because `ingest` prepended and `store.events` was newest-first. Rebasing onto main
+  picked up `feat(argus-webui): put the newest event at the bottom of the list`, which flipped `ingest`
+  to append — so `store.events` is now oldest-first and the reverse produced a **backwards file**. The
+  reverse is gone: store order is preserved verbatim, which is both chronological and the order the rows
+  appear in on screen. Caught by exporting from the live UI and comparing the file's ids against the
+  rows' on-screen order; the unit tests had encoded the old contract and stayed green through the
+  regression, so they were rewritten to assert store order is preserved and to pin that the export never
+  sorts.
 - **Paused buffer excluded.** `store.pausedBuffer` is not part of `store.events` until `resume()`
   (`eventStore.ts:168-181`). #1's own open question suggested "visible set only, to match what the
   user sees" — followed.

@@ -372,3 +372,40 @@ lived — plus `tsc --noEmit` and the 47 unit tests.
   into the search box and reading the value back.
 - The whole BodyViewer download suite re-run unchanged (truncated, request body, image bytes, no-body,
   custom payload, round-trip) to confirm the cURL block did not disturb the Request tab.
+
+
+---
+
+# Rebase onto main — ordering interaction
+
+Rebasing onto `origin/main` picked up `d11ff9d feat(argus-webui): put the newest event at the bottom of
+the list`, which flips `ingest` from prepend to append. `store.events` is therefore **oldest-first**,
+not newest-first as when `buildEventsExport` was written — so its `[...events].reverse()` turned a
+correct file into a backwards one. No conflict, and no failing test: the export unit tests fed a
+hand-built newest-first array and asserted the reversal, so they stayed green while the real export
+broke.
+
+Caught by exporting from the live UI and comparing against the DOM:
+
+```
+rows top-to-bottom : evt_1, evt_2, evt_3, evt_4, evt_5 ...
+file order         : evt_17, evt_16, evt_15, evt_14, evt_13 ...   <- backwards
+```
+
+Fix: drop the reverse and preserve store order, which is now both chronological and the on-screen order.
+Tests rewritten to encode the new contract — order preserved, timestamps ascending, and an out-of-order
+input passed through untouched so nobody re-adds a sort. Re-verified:
+
+```
+rows top-to-bottom : evt_1, evt_2, evt_3, evt_4, evt_5 ...
+file order         : evt_1, evt_2, evt_3, evt_4, evt_5 ...        <- matches
+```
+
+The full export/menu/cURL and BodyViewer download suites were re-run against the rebased tree
+(`virtual.ts` was substantially rewritten upstream) and all pass.
+
+**Harness notes for whoever runs these next.** Another Orca worktree was serving its own vite on port
+5173, so `http://localhost:5173` reached *that* tree while `--host` made this one answer on the LAN IP;
+three "failures" traced back to it. Bind with `--host` and drive the LAN address, or check
+`lsof -ti:5173` first. The virtualised list is also newest-at-bottom now, so a row can be missing from
+the DOM purely because it sits below the fold — scroll the viewport before concluding a row is absent.

@@ -19,9 +19,10 @@ export interface EventsExport {
 }
 
 /**
- * Pretty-printed export envelope. The array is reversed because the store keeps
- * events newest-first; a file that reads oldest-first reads like a log. Feeding
- * `.events` back through `store.ingest` restores newest-first, since it prepends.
+ * Pretty-printed export envelope. Store order is preserved: `ingest` appends, so
+ * `store.events` is already oldest-first, which is how a log file should read and
+ * also the order the rows appear in on screen. Do not sort or reverse here — the
+ * file should match what the user is looking at.
  */
 export function buildEventsExport(
   events: readonly ArgusEvent[],
@@ -33,7 +34,7 @@ export function buildEventsExport(
     exportedAt: new Date(exportedAt).toISOString(),
     device,
     eventCount: events.length,
-    events: [...events].reverse(),
+    events: [...events],
   };
   return JSON.stringify(payload, null, 2);
 }

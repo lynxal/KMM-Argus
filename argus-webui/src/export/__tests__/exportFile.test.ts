@@ -30,27 +30,38 @@ const DEVICE: DeviceInfo = {
   pkg: 'com.example.app',
 };
 
-/** Store order: newest first. */
-const NEWEST_FIRST = [log('c', 300), log('b', 200), log('a', 100)];
+/** Store order: `ingest` appends, so the list is oldest-first. */
+const STORE_ORDER = [log('a', 100), log('b', 200), log('c', 300)];
 
 describe('buildEventsExport', () => {
   it('carries the schema version, count and device', () => {
-    const parsed = JSON.parse(buildEventsExport(NEWEST_FIRST, DEVICE, 1_700_000_000_000)) as EventsExport;
+    const parsed = JSON.parse(buildEventsExport(STORE_ORDER, DEVICE, 1_700_000_000_000)) as EventsExport;
     expect(parsed.argusSchemaVersion).toBe(ARGUS_SCHEMA_VERSION);
     expect(parsed.eventCount).toBe(3);
     expect(parsed.device).toEqual(DEVICE);
     expect(parsed.exportedAt).toBe('2023-11-14T22:13:20.000Z');
   });
 
-  it('writes events oldest-first so the file reads like a log', () => {
-    const parsed = JSON.parse(buildEventsExport(NEWEST_FIRST, DEVICE, 0)) as EventsExport;
+  it('preserves store order, which is oldest-first and matches the rows on screen', () => {
+    const parsed = JSON.parse(buildEventsExport(STORE_ORDER, DEVICE, 0)) as EventsExport;
     expect(parsed.events.map((e) => e.id)).toEqual(['a', 'b', 'c']);
   });
 
+  it('writes timestamps in ascending order', () => {
+    const parsed = JSON.parse(buildEventsExport(STORE_ORDER, DEVICE, 0)) as EventsExport;
+    const stamps = parsed.events.map((e) => e.timestamp);
+    expect(stamps).toEqual([...stamps].sort((x, y) => x - y));
+  });
+
+  it('does not reorder an out-of-order list — the store is the authority', () => {
+    const parsed = JSON.parse(buildEventsExport([log('c', 300), log('a', 100)], DEVICE, 0)) as EventsExport;
+    expect(parsed.events.map((e) => e.id)).toEqual(['c', 'a']);
+  });
+
   it('does not mutate the input array', () => {
-    const input = [...NEWEST_FIRST];
+    const input = [...STORE_ORDER];
     buildEventsExport(input, DEVICE, 0);
-    expect(input.map((e) => e.id)).toEqual(['c', 'b', 'a']);
+    expect(input.map((e) => e.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('stays valid JSON with no device and no events', () => {
