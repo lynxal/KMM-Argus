@@ -5,7 +5,9 @@
 // call's Related Logs list therefore selected an event that could not answer the
 // question being asked — the tab vanished mid-walk and the rest of the group
 // became unreachable without going back to the call. The panel also filtered to
-// logs, so a log could never lead back to the request it ran under.
+// logs, so a log could never lead back to the request it ran under, and it omitted
+// the event being inspected, so a five-event scope read as four rows with no
+// indication of where in the group you were standing.
 //
 // Usage:  node related-logs-probe.js
 //
@@ -23,46 +25,47 @@ const t0 = Date.now();
 const ts = () => ((Date.now() - t0) / 1000).toFixed(3) + 's';
 const log = (...a) => console.log(ts(), ...a);
 
-// Two calls plus three logs in one scope — the shape the sample app's
-// "Correlated pair" button produces — and one log outside any scope. The group is
-// deliberately larger than two so "the group minus me" is a distinct answer from
-// "the whole group", and mixed so a logs-only panel cannot pass.
-const CORRELATED_LOGS = ['alpha', 'beta', 'gamma'];
+// Two calls plus three logs in one scope — the shape the sample app's "Correlated
+// pair" button produces — and one log outside any scope. Mixed on purpose: a
+// logs-only panel passes a same-kind fixture.
 const GROUP_SIZE = 5;
-const EVENTS = [
-    {
+// Arrival order matters — the panel lists the group as it arrived, and the marked
+// row has to land in the right slot — so the fixture interleaves the way the sample
+// actually emits: line, call, line, call, line.
+function call(id, path, ts) {
+    return {
         type: 'HttpEvent',
-        id: 'call-1',
-        timestamp: 1_000,
+        id,
+        timestamp: ts,
         source: 'HTTP',
         engine: 'ktor',
         durationMs: 5,
         correlationId: CID,
-        request: { method: 'GET', url: 'https://probe.example/users/1', host: 'probe.example', path: '/users/1', headers: [] },
+        request: { method: 'GET', url: `https://probe.example${path}`, host: 'probe.example', path, headers: [] },
         response: { statusCode: 200, statusText: 'OK', headers: [] },
-    },
-    {
-        type: 'HttpEvent',
-        id: 'call-2',
-        timestamp: 1_004,
-        source: 'HTTP',
-        engine: 'ktor',
-        durationMs: 7,
-        correlationId: CID,
-        request: { method: 'GET', url: 'https://probe.example/posts', host: 'probe.example', path: '/posts', headers: [] },
-        response: { statusCode: 200, statusText: 'OK', headers: [] },
-    },
-    ...CORRELATED_LOGS.map((name, i) => ({
+    };
+}
+
+function line(name, ts) {
+    return {
         type: 'LogEvent',
         id: `log-${name}`,
-        timestamp: 1_001 + i,
+        timestamp: ts,
         source: 'LOG',
         level: 'Debug',
         tag: 'Probe',
         message: `correlated line ${name}`,
         payload: {},
         correlationId: CID,
-    })),
+    };
+}
+
+const EVENTS = [
+    line('alpha', 1_000),
+    call('call-1', '/users/1', 1_001),
+    line('beta', 1_002),
+    call('call-2', '/posts', 1_003),
+    line('gamma', 1_004),
     {
         type: 'LogEvent',
         id: 'log-uncorrelated',
@@ -75,6 +78,9 @@ const EVENTS = [
         correlationId: null,
     },
 ];
+// Index of each member in the group, so the "marked in place" assertions name a
+// slot rather than a magic number.
+const AT = { alpha: 0, 'call-1': 1, beta: 2, 'call-2': 3, gamma: 4 };
 
 // --- in-page helpers -------------------------------------------------------
 // The detail tab strip is the row of buttons in the panel header; the active tab
@@ -96,9 +102,11 @@ function pageActiveTab() {
 function pageRelatedLines() {
     const panel = document.querySelector('[data-related-logs]');
     if (!panel) return [];
-    return [...panel.querySelectorAll('button')].map((b) => ({
-        kind: b.dataset.relatedKind,
-        text: b.textContent.trim(),
+    return [...panel.querySelectorAll('[data-related-kind]')].map((el) => ({
+        kind: el.dataset.relatedKind,
+        text: el.textContent.trim(),
+        current: el.dataset.relatedCurrent !== undefined,
+        clickable: el.tagName === 'BUTTON',
     }));
 }
 
@@ -163,8 +171,18 @@ function check(name, ok, detail) {
         await page.waitForTimeout(SETTLE_MS);
         let lines = await page.evaluate(pageRelatedLines);
         check(
-            'the call lists the whole group minus itself',
-            lines.length === GROUP_SIZE - 1,
+            'the call lists the whole group',
+            lines.length === GROUP_SIZE,
+            JSON.stringify(lines),
+        );
+        check(
+            'the call is marked as the one being inspected',
+            lines.filter((l) => l.current).length === 1 && lines[AT['call-1']].current,
+            JSON.stringify(lines),
+        );
+        check(
+            'the marked row is not a control',
+            lines.every((l) => l.current !== l.clickable),
             JSON.stringify(lines),
         );
         check(
@@ -191,8 +209,13 @@ function check(name, ok, detail) {
 
         lines = await page.evaluate(pageRelatedLines);
         check(
-            'the log lists its group minus itself',
-            lines.length === GROUP_SIZE - 1 && !lines.some((l) => l.text.includes('alpha')),
+            'the log lists the whole group',
+            lines.length === GROUP_SIZE,
+            JSON.stringify(lines),
+        );
+        check(
+            'the log is marked in place, in arrival order',
+            lines.filter((l) => l.current).length === 1 && lines[AT.alpha].current,
             JSON.stringify(lines),
         );
         check(
@@ -208,8 +231,7 @@ function check(name, ok, detail) {
         check(
             'a second hop works the same way',
             (await page.evaluate(pageActiveTab)) === 'Related Logs' &&
-                lines.length === GROUP_SIZE - 1 &&
-                !lines.some((l) => l.text.includes('beta')),
+                lines.length === GROUP_SIZE && lines[AT.beta].current,
             JSON.stringify(lines),
         );
 
@@ -223,8 +245,8 @@ function check(name, ok, detail) {
         );
         lines = await page.evaluate(pageRelatedLines);
         check(
-            'the call reached by a hop lists the rest of the group',
-            lines.length === GROUP_SIZE - 1 && !lines.some((l) => l.text.includes('/posts')),
+            'the call reached by a hop marks itself in the group',
+            lines.length === GROUP_SIZE && lines[AT['call-2']].current,
             JSON.stringify(lines),
         );
 
@@ -239,7 +261,7 @@ function check(name, ok, detail) {
         );
 
         if (failures.length) throw new Error(`${failures.length} assertion(s) failed`);
-        log(`OK — ${failures.length === 0 ? 12 : '?'} assertions passed`);
+        log('OK — every assertion passed');
         await browser.close();
         device.close();
         process.exit(0);

@@ -67,19 +67,23 @@ export function linkedEventIds(
   return ids;
 }
 
-export interface RelatedEvents {
-  /** Group members other than the event asked about, in arrival order. */
+export interface CorrelationGroup {
+  /**
+   * Every member in arrival order, **including** the event asked about — so the
+   * caller can show where that event sits among the others rather than presenting
+   * a list with a hole in it. A group of one means nothing else shares the scope.
+   */
   readonly events: ArgusEvent[];
   /**
    * The scope they were matched on, or null when the event carries none — in
-   * which case there is nothing to relate and `events` is empty.
+   * which case there is no group and `events` is empty.
    */
   readonly correlationId: string | null;
 }
 
 /**
- * The rest of `event`'s correlation group — everything stamped with the same
- * correlationId, however far apart in time, minus `event` itself.
+ * `event`'s correlation group — everything stamped with the same correlationId,
+ * however far apart in time, `event` included and in arrival order.
  *
  * Calls as well as logs. A group is a `withCorrelation { … }` scope, and the calls
  * made inside one are as much a part of what happened as the lines logged around
@@ -88,6 +92,10 @@ export interface RelatedEvents {
  * call — correlationId is stamped on both, so asking from any member is the same
  * question from a different starting point.
  *
+ * The asking event is kept rather than filtered out: a five-event scope should read
+ * as five rows with one of them marked, not as four rows the reader has to place
+ * themselves among.
+ *
  * There is deliberately no time-based fallback. This previously matched a ±500 ms
  * window centred on the event and never read correlationId at all, which invented
  * relationships (any log that happened to land in the window) and missed real ones
@@ -95,14 +103,16 @@ export interface RelatedEvents {
  * window answers "what else happened around now", which the event list already shows
  * — logs and HTTP calls share it — so guessing here only added a false signal.
  */
-export function relatedEvents(
+export function correlationGroup(
   events: readonly ArgusEvent[],
   event: HttpEvent | LogEvent,
-): RelatedEvents {
+): CorrelationGroup {
   const correlationId = event.correlationId ?? null;
   if (correlationId == null) return { events: [], correlationId: null };
   return {
-    events: sameCorrelation(events, correlationId, event.id),
+    events: events.filter(
+      (e) => (isHttpEvent(e) || isLogEvent(e)) && e.correlationId === correlationId,
+    ),
     correlationId,
   };
 }

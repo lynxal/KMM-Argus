@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkedEventIds, relatedEvents } from '../related';
+import { correlationGroup, linkedEventIds } from '../related';
 import type { ArgusEvent, HttpEvent, LogEvent } from '../../transport/schema';
 
 /** `events` is oldest-first (ingest appends), so fixtures are written in arrival order. */
@@ -92,7 +92,7 @@ describe('linkedEventIds', () => {
   });
 });
 
-describe('relatedEvents', () => {
+describe('correlationGroup', () => {
   it('matches on correlationId regardless of how far apart in time', () => {
     const call = http('h1', 200, { correlation: 'trace-1', timestamp: 1_000 });
     const events: ArgusEvent[] = [
@@ -101,10 +101,10 @@ describe('relatedEvents', () => {
       log('far-but-correlated', { correlation: 'trace-1', timestamp: 90_000 }),
     ];
 
-    const related = relatedEvents(events, call);
+    const group = correlationGroup(events, call);
 
-    expect(related.correlationId).toBe('trace-1');
-    expect(related.events.map((e) => e.id)).toEqual(['far-but-correlated']);
+    expect(group.correlationId).toBe('trace-1');
+    expect(group.events.map((e) => e.id)).toEqual(['h1', 'far-but-correlated']);
   });
 
   it('includes the calls in the scope, not only its logs', () => {
@@ -115,30 +115,34 @@ describe('relatedEvents', () => {
     const line = log('l1', { correlation: 'trace-1', timestamp: 1_002 });
     const events: ArgusEvent[] = [first, line, second];
 
-    expect(relatedEvents(events, line).events.map((e) => e.id)).toEqual(['h1', 'h2']);
-    expect(relatedEvents(events, first).events.map((e) => e.id)).toEqual(['l1', 'h2']);
+    expect(correlationGroup(events, line).events.map((e) => e.id)).toEqual(['h1', 'l1', 'h2']);
   });
 
-  it('returns members in arrival order', () => {
-    const call = http('h1', 200, { correlation: 'trace-1', timestamp: 1_000 });
+  it('keeps the asking event, in arrival order, so its position is visible', () => {
+    // The panel marks this one in place. Dropping it would leave the reader to
+    // work out where they are in a list with a hole in it.
     const events: ArgusEvent[] = [
-      call,
+      http('h1', 200, { correlation: 'trace-1', timestamp: 1_000 }),
       log('l1', { correlation: 'trace-1', timestamp: 1_001 }),
       http('h2', 500, { correlation: 'trace-1', timestamp: 1_002 }),
       log('l2', { correlation: 'trace-1', timestamp: 1_003 }),
     ];
+    const asking = events[1] as ArgusEvent;
 
-    expect(relatedEvents(events, call).events.map((e) => e.id)).toEqual(['l1', 'h2', 'l2']);
+    const group = correlationGroup(events, asking as never);
+
+    expect(group.events.map((e) => e.id)).toEqual(['h1', 'l1', 'h2', 'l2']);
+    expect(group.events.indexOf(asking)).toBe(1);
   });
 
-  it('reports none when a correlated call is alone in its scope', () => {
+  it('returns the event alone when nothing else shares its scope', () => {
     const call = http('h1', 200, { correlation: 'trace-1' });
     const events: ArgusEvent[] = [call, log('l1', { timestamp: 1_000 })];
 
-    const related = relatedEvents(events, call);
+    const group = correlationGroup(events, call);
 
-    expect(related.correlationId).toBe('trace-1');
-    expect(related.events).toEqual([]);
+    expect(group.correlationId).toBe('trace-1');
+    expect(group.events.map((e) => e.id)).toEqual(['h1']);
   });
 
   it('answers for a log the same way it answers for a call', () => {
@@ -149,21 +153,18 @@ describe('relatedEvents', () => {
     const second = log('l2', { correlation: 'trace-1', timestamp: 1_002 });
     const events: ArgusEvent[] = [call, first, second, log('l3', { correlation: 'trace-9' })];
 
-    const related = relatedEvents(events, first);
-
-    expect(related.correlationId).toBe('trace-1');
-    // Never its own related event; nothing from another scope.
-    expect(related.events.map((e) => e.id)).toEqual(['h1', 'l2']);
+    expect(correlationGroup(events, first).events.map((e) => e.id)).toEqual(['h1', 'l1', 'l2']);
+    expect(correlationGroup(events, call).events.map((e) => e.id)).toEqual(['h1', 'l1', 'l2']);
   });
 
   it('reports none for a log with no correlationId', () => {
     const orphan = log('l1', { timestamp: 1_000 });
     const events: ArgusEvent[] = [orphan, log('l2', { correlation: 'trace-1', timestamp: 1_000 })];
 
-    const related = relatedEvents(events, orphan);
+    const group = correlationGroup(events, orphan);
 
-    expect(related.correlationId).toBeNull();
-    expect(related.events).toEqual([]);
+    expect(group.correlationId).toBeNull();
+    expect(group.events).toEqual([]);
   });
 
   it('relates nothing without a correlationId — no time-window guessing', () => {
@@ -177,9 +178,9 @@ describe('relatedEvents', () => {
       log('correlated-but-not-to-this-call', { correlation: 'trace-9', timestamp: 1_000 }),
     ];
 
-    const related = relatedEvents(events, call);
+    const group = correlationGroup(events, call);
 
-    expect(related.correlationId).toBeNull();
-    expect(related.events).toEqual([]);
+    expect(group.correlationId).toBeNull();
+    expect(group.events).toEqual([]);
   });
 });
