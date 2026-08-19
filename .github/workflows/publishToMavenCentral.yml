@@ -70,6 +70,6 @@ jobs:
           body: |
             ## SPM consumers
             Update `Package.swift` `binaryTarget`:
-            - URL: `https://github.com/lynxal/argus/releases/download/${{ github.event.release.tag_name }}/argus_ios.xcframework.zip`
+            - URL: `https://github.com/lynxal/KMM-Argus/releases/download/${{ github.event.release.tag_name }}/argus_ios.xcframework.zip`
             - Checksum: `${{ steps.xcf.outputs.checksum }}`
           append_body: true
