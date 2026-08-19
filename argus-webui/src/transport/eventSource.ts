@@ -1,7 +1,13 @@
 import type { Signal } from '@preact/signals-core';
 import type { ArgusEvent, DeviceInfo } from './schema';
 
-export type ConnectionState = 'connected' | 'reconnecting' | 'disconnected';
+/**
+ * `connecting` — an attempt is in flight and none has resolved yet (cold start,
+ * including the /api/info + backfill round trips). Neutral, not a failure.
+ * `reconnecting` — an attempt failed and a retry is scheduled.
+ * `disconnected` — the transport was torn down and is not retrying.
+ */
+export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
 export type EventListener = (event: ArgusEvent) => void;
 
