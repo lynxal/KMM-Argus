@@ -78,7 +78,12 @@ export interface RelatedLogs {
 
 /**
  * Log events belonging to `event` — those stamped with the same correlationId,
- * however far apart in time they are.
+ * however far apart in time they are. `event` itself is never in the result, so a
+ * log asking this question gets the rest of its own correlation group.
+ *
+ * Takes a log as readily as a call: correlationId is stamped on both, so the
+ * relationship is symmetric and walking a group from any member is the same
+ * question asked from a different starting point.
  *
  * There is deliberately no time-based fallback. This previously matched a ±500 ms
  * window centred on the event and never read correlationId at all, which invented
@@ -89,7 +94,7 @@ export interface RelatedLogs {
  */
 export function relatedLogEvents(
   events: readonly ArgusEvent[],
-  event: HttpEvent,
+  event: HttpEvent | LogEvent,
 ): RelatedLogs {
   const correlationId = event.correlationId ?? null;
   if (correlationId == null) return { logs: [], correlationId: null };

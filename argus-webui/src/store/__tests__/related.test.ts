@@ -117,6 +117,31 @@ describe('relatedLogEvents', () => {
     expect(related.logs).toEqual([]);
   });
 
+  it('answers for a log the same way it answers for a call', () => {
+    // The relationship is symmetric, so a log can walk its own correlation group.
+    // Selecting one member used to be a dead end: only calls could ask this.
+    const call = http('h1', 200, { correlation: 'trace-1' });
+    const first = log('l1', { correlation: 'trace-1', timestamp: 1_001 });
+    const second = log('l2', { correlation: 'trace-1', timestamp: 1_002 });
+    const events: ArgusEvent[] = [call, first, second, log('l3', { correlation: 'trace-9' })];
+
+    const related = relatedLogEvents(events, first);
+
+    expect(related.correlationId).toBe('trace-1');
+    // The asking log is never its own related log; the call is not a log at all.
+    expect(related.logs.map((l) => l.id)).toEqual(['l2']);
+  });
+
+  it('reports none for a log with no correlationId', () => {
+    const orphan = log('l1', { timestamp: 1_000 });
+    const events: ArgusEvent[] = [orphan, log('l2', { correlation: 'trace-1', timestamp: 1_000 })];
+
+    const related = relatedLogEvents(events, orphan);
+
+    expect(related.correlationId).toBeNull();
+    expect(related.logs).toEqual([]);
+  });
+
   it('relates nothing without a correlationId — no time-window guessing', () => {
     // The logs below are as close in time as they could be. Before correlationId was
     // read at all, a ±500 ms window would have reported every one of them.

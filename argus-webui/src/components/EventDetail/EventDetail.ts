@@ -27,6 +27,9 @@ export function createEventDetail({ store, bus }: EventDetailProps): HTMLElement
 
   const header = document.createElement('div');
   header.className = 'h-7 flex items-center gap-1 px-2 border-b border-border-default text-fg-2 text-xs font-ui';
+  // Structural hook for the browser probes — the same role data-event-id plays on
+  // a row. Classes here are styling and change freely; this does not.
+  header.dataset['detailTabs'] = '';
   wrapper.appendChild(header);
 
   const content = document.createElement('div');
@@ -68,7 +71,7 @@ export function createEventDetail({ store, bus }: EventDetailProps): HTMLElement
     const active = store.detailTab.value[kind];
     content.innerHTML = '';
     if (isHttpEvent(evt)) content.appendChild(createHttpTabs({ event: evt, active, store, bus }));
-    else if (isLogEvent(evt)) content.appendChild(createLogTabs({ event: evt, active, bus }));
+    else if (isLogEvent(evt)) content.appendChild(createLogTabs({ event: evt, active, store, bus }));
     else if (isCustomEvent(evt)) content.appendChild(createCustomTabs({ event: evt, active, bus }));
   }
 
