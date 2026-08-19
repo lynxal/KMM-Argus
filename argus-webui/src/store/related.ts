@@ -20,9 +20,6 @@ import { redirectChain } from './redirects';
  * everything here matches on the id, never on position.
  */
 
-/** Fallback window when an event carries no correlationId. */
-export const RELATED_LOG_WINDOW_MS = 500;
-
 /** Events sharing a non-null id with `event`, excluding `event` itself. */
 function sameCorrelation(
   events: readonly ArgusEvent[],
@@ -73,36 +70,31 @@ export function linkedEventIds(
 export interface RelatedLogs {
   readonly logs: LogEvent[];
   /**
-   * How the match was made. `correlationId` is exact; `time` is the heuristic used
-   * when the event was emitted outside any correlation scope.
+   * The scope the logs were matched on, or null when the event carries none — in
+   * which case there is nothing to relate and `logs` is empty.
    */
-  readonly matchedBy: 'correlationId' | 'time';
-  /** The id matched on, when `matchedBy` is `correlationId`. */
   readonly correlationId: string | null;
 }
 
 /**
- * Log events belonging to `event`.
+ * Log events belonging to `event` — those stamped with the same correlationId,
+ * however far apart in time they are.
  *
- * Prefers the exact relationship: when the event carries a correlationId, only logs
- * stamped with the same id count, however far apart in time they are. The ±500 ms
- * window is the fallback for traffic emitted outside any `withCorrelation` scope —
- * it was previously the *only* rule, which both invented relationships (any log that
- * happened to land in the window) and missed real ones (a log from the same scope
- * emitted while a slow call was still in flight).
+ * There is deliberately no time-based fallback. This previously matched a ±500 ms
+ * window centred on the event and never read correlationId at all, which invented
+ * relationships (any log that happened to land in the window) and missed real ones
+ * (a log from the same scope emitted while a slow call was still in flight). A
+ * window answers "what else happened around now", which the event list already shows
+ * — logs and HTTP calls share it — so guessing here only added a false signal.
  */
 export function relatedLogEvents(
   events: readonly ArgusEvent[],
   event: HttpEvent,
 ): RelatedLogs {
   const correlationId = event.correlationId ?? null;
-  if (correlationId != null) {
-    const logs = sameCorrelation(events, correlationId, event.id).filter(isLogEvent);
-    return { logs, matchedBy: 'correlationId', correlationId };
-  }
-  const logs = events.filter(
-    (e): e is LogEvent =>
-      isLogEvent(e) && Math.abs(e.timestamp - event.timestamp) <= RELATED_LOG_WINDOW_MS,
-  );
-  return { logs, matchedBy: 'time', correlationId: null };
+  if (correlationId == null) return { logs: [], correlationId: null };
+  return {
+    logs: sameCorrelation(events, correlationId, event.id).filter(isLogEvent),
+    correlationId,
+  };
 }

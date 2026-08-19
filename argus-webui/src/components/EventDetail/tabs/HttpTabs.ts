@@ -7,7 +7,7 @@ import {
 import { createBodyViewer } from '../../BodyViewer/BodyViewer';
 import { buildCurl, type ShortcutBus } from '../../../input/keyboard';
 import { redirectChain } from '../../../store/redirects';
-import { relatedLogEvents, RELATED_LOG_WINDOW_MS } from '../../../store/related';
+import { relatedLogEvents } from '../../../store/related';
 import {
   STATUS_BUCKET_DOTS,
   STATUS_BUCKET_TEXT,
@@ -268,22 +268,23 @@ function renderRelatedLogs(event: HttpEvent, store: EventStore): HTMLElement {
   const box = document.createElement('div');
   box.className = 'flex flex-col gap-1 font-mono text-xs';
 
-  // State how the match was made: an exact correlationId match and a ±500 ms guess
-  // are very different claims, and the list looks identical either way.
+  // No correlation id means there is nothing to relate — say that, and say how to
+  // get one. Guessing from timestamps would only look like an answer.
+  if (related.correlationId == null) {
+    box.appendChild(textRow('No correlation id on this call.'));
+    box.appendChild(
+      textRow('Wrap the call in withCorrelation { … } to tie its log lines to it.'),
+    );
+    return box;
+  }
+
   const caption = document.createElement('div');
   caption.className = 'text-fg-3 text-xs font-ui';
-  caption.textContent = related.matchedBy === 'correlationId'
-    ? `Correlation id ${related.correlationId}`
-    : `No correlation id on this call — showing logs within ±${RELATED_LOG_WINDOW_MS} ms`;
+  caption.textContent = `Correlation id ${related.correlationId}`;
   box.appendChild(caption);
 
   if (related.logs.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'text-fg-3';
-    empty.textContent = related.matchedBy === 'correlationId'
-      ? 'No log events share this correlation id.'
-      : `No log events within ±${RELATED_LOG_WINDOW_MS} ms.`;
-    box.appendChild(empty);
+    box.appendChild(textRow('No log events share this correlation id.'));
     return box;
   }
 

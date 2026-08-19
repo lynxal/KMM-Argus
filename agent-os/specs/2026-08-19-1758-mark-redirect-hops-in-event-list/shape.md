@@ -92,14 +92,13 @@ Both failure directions were live: a log that merely happened to land in the win
 correlated, and a log genuinely from the same `withCorrelation { … }` scope was missed whenever the
 call took longer than 500 ms.
 
-Fixed by matching on `correlationId` first and falling back to the window only when the event carries
-no id, with the tab now stating which rule it used — an exact id match and a ±500 ms guess are very
-different claims and the list looked identical either way. Log lines in the tab are also clickable now,
-matching the redirect-chain block.
-
-Not fixed, and worth its own issue: the fallback window is centred on `event.timestamp` and ignores
-`durationMs`, so for a slow call it looks in the wrong place entirely. Left alone deliberately —
-`correlationId` is the real answer and the window is now only a last resort.
+Fixed by relating on `correlationId` and **dropping the time window entirely**. The window was first
+kept as a fallback with the tab stating which rule it used, then removed on review: it answers "what
+logs happened around this call", which the event list already shows since logs and HTTP calls share it,
+so keeping it only preserved a false signal. It was also wrong on its own terms — centred on
+`event.timestamp` and ignoring `durationMs`, so for a slow call it looked in the wrong place. A call
+with no correlation id now shows nothing and points at `withCorrelation { … }`. Log lines in the tab
+are clickable, matching the redirect-chain block.
 
 ## Found during implementation
 
@@ -113,8 +112,9 @@ Not fixed, and worth its own issue: the fallback window is centred on `event.tim
   20, with no chain — while the on-disk file was correct. Restarting the dev server after `rm -rf
   node_modules/.vite` fixed it. Worth knowing before concluding a fixture change "didn't work".
 - **The mock source compresses fixture timestamps by `speed`** (`4` by default), which shrinks every
-  gap by 4×. The ±500 ms related-logs window therefore swallows almost the entire fixture set in dev —
-  looks like a bug in the window, is an artifact of the replay. Real device traffic is unaffected.
+  gap by 4×. While the ±500 ms window still existed, it therefore swallowed almost the entire fixture
+  set in dev — which is part of what made the case for dropping it: a window that wide relates
+  everything to everything.
 - **`--accent-subtle` and `--bg-selected` are close in the light theme** (`--blue-50` vs `#e5efff`), so
   the linked wash alone barely separates from the selection tint. The dashed-vs-solid rail is what
   carries the distinction there — which is the reason the decision was to differ on two axes, and why

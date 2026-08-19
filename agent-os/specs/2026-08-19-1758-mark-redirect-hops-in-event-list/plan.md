@@ -260,7 +260,8 @@ All tasks completed, plus two things the plan did not anticipate:
 - **`Related Logs` was fixed too, on request.** It matched on a ±500 ms window and never read
   `correlationId`. Logic extracted to a new pure `store/related.ts` (`relatedLogEvents`,
   `linkedEventIds`), which also widened the linked-row highlight to cover correlation scopes, not just
-  redirect chains. See shape.md for the detail.
+  redirect chains. The time window was then dropped entirely rather than kept as a fallback. See
+  shape.md for the detail.
 
 Deviations in the original tasks:
 
@@ -276,7 +277,7 @@ Verified: `:argus-core:allTests` (all targets incl. iOS), `:argus-okhttp:test`,
 clean. Headless check confirms exactly one *painted* pill with the origin named in its tooltip, zero
 text-filter matches for `REDIRECTED`, the linked rail landing on the chain-mate in both directions with
 the interleaved log row untouched, correlation linking in both directions (HTTP↔log) with uncorrelated
-selections linking nothing, and `Related Logs` naming the rule it matched on. The `lint-tokens` failure
+selections linking nothing, and `Related Logs` relating on correlationId alone. The `lint-tokens` failure
 on `src/components/EmptyStates/WaitingForEvents.ts:17-18` is pre-existing — reproduced on a clean tree.
 
 ## Out of scope

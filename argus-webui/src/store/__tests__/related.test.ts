@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkedEventIds, relatedLogEvents, RELATED_LOG_WINDOW_MS } from '../related';
+import { linkedEventIds, relatedLogEvents } from '../related';
 import type { ArgusEvent, HttpEvent, LogEvent } from '../../transport/schema';
 
 /** `events` is oldest-first (ingest appends), so fixtures are written in arrival order. */
@@ -103,34 +103,34 @@ describe('relatedLogEvents', () => {
 
     const related = relatedLogEvents(events, call);
 
-    expect(related.matchedBy).toBe('correlationId');
     expect(related.correlationId).toBe('trace-1');
     expect(related.logs.map((l) => l.id)).toEqual(['far-but-correlated']);
   });
 
-  it('reports no logs rather than falling back when a correlated call has none', () => {
+  it('reports none when a correlated call has no logs in its scope', () => {
     const call = http('h1', 200, { correlation: 'trace-1' });
     const events: ArgusEvent[] = [call, log('l1', { timestamp: 1_000 })];
 
     const related = relatedLogEvents(events, call);
 
-    expect(related.matchedBy).toBe('correlationId');
+    expect(related.correlationId).toBe('trace-1');
     expect(related.logs).toEqual([]);
   });
 
-  it('falls back to the time window only when the call has no correlationId', () => {
+  it('relates nothing without a correlationId — no time-window guessing', () => {
+    // The logs below are as close in time as they could be. Before correlationId was
+    // read at all, a ±500 ms window would have reported every one of them.
     const call = http('h1', 200, { timestamp: 1_000 });
     const events: ArgusEvent[] = [
       call,
-      log('inside', { timestamp: 1_000 + RELATED_LOG_WINDOW_MS }),
-      log('outside', { timestamp: 1_000 + RELATED_LOG_WINDOW_MS + 1 }),
-      log('before', { timestamp: 1_000 - RELATED_LOG_WINDOW_MS }),
+      log('same-ms', { timestamp: 1_000 }),
+      log('1ms-later', { timestamp: 1_001 }),
+      log('correlated-but-not-to-this-call', { correlation: 'trace-9', timestamp: 1_000 }),
     ];
 
     const related = relatedLogEvents(events, call);
 
-    expect(related.matchedBy).toBe('time');
     expect(related.correlationId).toBeNull();
-    expect(related.logs.map((l) => l.id)).toEqual(['inside', 'before']);
+    expect(related.logs).toEqual([]);
   });
 });

@@ -177,8 +177,10 @@ is emitted between them — so the `↳ REDIRECTED` pill alone tells the user a 
 without telling them where the other end is, and a correlation scope is invisible entirely unless the
 optional correlation-id column is on. Selecting any event lights up everything related to it wherever
 it sits. The detail pane backs this up with two clickable lists: *Redirect chain* (every hop) and
-*Related Logs* (every log in the same correlation scope, or a ±500 ms window when the call carries no
-correlation id — the tab states which rule it used).
+*Related Logs* (every log in the same correlation scope). *Related Logs* relates on `correlationId`
+only — a call emitted outside any correlation scope shows nothing and says why. There is no
+time-window fallback: "what logs happened around this call" is what the event list already shows,
+since logs and HTTP calls share it, so guessing here would only add a false signal.
 
 ### Live streaming behavior
 
