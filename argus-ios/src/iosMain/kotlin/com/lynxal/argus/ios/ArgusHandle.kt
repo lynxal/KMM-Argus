@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import platform.Foundation.NSLog
+import kotlin.concurrent.Volatile
 
 /**
  * Lifecycle handle for a running Argus server on iOS. Returned from [Argus.start];
@@ -18,6 +19,7 @@ import platform.Foundation.NSLog
 public class ArgusHandle internal constructor(
     private val server: ArgusServer,
     private val scope: CoroutineScope,
+    private val requestedPort: Int = 0,
 ) {
     /**
      * The event bus the running server is reading from. Wire into your Ktor
@@ -35,6 +37,9 @@ public class ArgusHandle internal constructor(
      */
     public val url: StateFlow<String?> = _url.asStateFlow()
 
+    @Volatile
+    private var stopped: Boolean = false
+
     private val _startupError: MutableStateFlow<Throwable?> = MutableStateFlow(null)
 
     /**
@@ -45,8 +50,12 @@ public class ArgusHandle internal constructor(
 
     internal fun onStarted() {
         val ip = LocalIp.firstIPv4() ?: "0.0.0.0"
-        val bound = "http://$ip:${server.boundPort}"
+        val port = server.boundPort
+        val bound = "http://$ip:$port"
         _url.value = bound
+        if (requestedPort != 0 && requestedPort != port) {
+            NSLog("[Argus] port $requestedPort was unavailable — fell back to $port")
+        }
         NSLog("[Argus] listening on $bound")
     }
 
@@ -59,11 +68,22 @@ public class ArgusHandle internal constructor(
      * Stops the embedded server, cancels the supplied scope, and resets [url] and
      * [startupError] to `null`. Don't reuse a stopped handle — call [Argus.start]
      * again to get a fresh one.
+     *
+     * **Never throws, and safe to call at any point** — before the server has finished
+     * binding, after a failed start, or twice. Argus is a debugging aid; it must not be able
+     * to take the host app down on the way out. Anything that goes wrong during teardown is
+     * logged and swallowed.
+     *
+     * Blocks the caller for up to ~1.1 s while the engine drains. Call it off the main
+     * thread if that matters to you.
      */
     public fun stop() {
-        server.stop()
-        scope.cancel()
+        if (stopped) return
+        stopped = true
         _url.value = null
         _startupError.value = null
+        runCatching { server.stop() }
+            .onFailure { NSLog("[Argus] stop failed, ignoring: ${it.message ?: it::class.simpleName}") }
+        runCatching { scope.cancel() }
     }
 }

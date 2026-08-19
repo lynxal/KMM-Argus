@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class DebugToolsImpl : DebugTools {
     private val empty: StateFlow<String?> = MutableStateFlow<String?>(null).asStateFlow()
+    private val notRunning: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
 
     override fun buildHttpClient(): HttpClient = HttpClient(Darwin) {
         install(ContentNegotiation) {
@@ -29,6 +30,18 @@ class DebugToolsImpl : DebugTools {
     }
 
     override fun observeArgusUrl(): StateFlow<String?> = empty
+
+    override fun observeArgusError(): StateFlow<String?> = empty
+
+    override fun observeArgusRunning(): StateFlow<Boolean> = notRunning
+
+    override fun startArgus() {
+        // no-op in release
+    }
+
+    override fun stopArgus() {
+        // no-op in release
+    }
 
     override fun publishCustom(source: String, label: String, payload: String) {
         // no-op in release

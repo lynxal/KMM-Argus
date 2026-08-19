@@ -22,10 +22,14 @@ internal fun createTestArgusConfig(
     appInfo: AppInfo = createTestAppInfo(),
     maxEvents: Int = 500,
     corsDevOrigins: List<String> = emptyList(),
+    port: Int = 0,
+    portFallback: Boolean = false,
 ): ArgusConfig = ArgusConfig(
     appInfo = appInfo,
     maxEvents = maxEvents,
     corsDevOrigins = corsDevOrigins,
+    port = port,
+    portFallback = portFallback,
 )
 
 internal fun createTestEventFilter(

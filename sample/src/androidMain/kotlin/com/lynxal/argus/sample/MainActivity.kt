@@ -14,6 +14,10 @@ class MainActivity : ComponentActivity() {
             App(
                 httpClient = app.httpClient,
                 argusUrl = tools.observeArgusUrl(),
+                argusError = tools.observeArgusError(),
+                argusRunning = tools.observeArgusRunning(),
+                onStartArgus = { tools.startArgus() },
+                onStopArgus = { tools.stopArgus() },
                 onPublishCustom = {
                     tools.publishCustom(
                         source = "sample",
