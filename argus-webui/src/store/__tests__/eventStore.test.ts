@@ -60,9 +60,18 @@ describe('createEventStore', () => {
     const store = createEventStore({ maxEvents: 5 });
     for (let i = 0; i < 10; i++) store.ingest(log(i));
     expect(store.events.value).toHaveLength(5);
-    // newest-first
-    expect(store.events.value[0]!.id).toBe('e9');
-    expect(store.events.value[4]!.id).toBe('e5');
+    // oldest-first: the cap evicts from the front, so the OLDEST five are gone
+    expect(store.events.value[0]!.id).toBe('e5');
+    expect(store.events.value[4]!.id).toBe('e9');
+  });
+
+  it('caps the paused buffer at maxEvents, dropping the oldest', () => {
+    const store = createEventStore({ maxEvents: 3 });
+    store.pause();
+    for (let i = 0; i < 6; i++) store.ingest(log(i));
+    expect(store.pausedBuffer.value.map((e) => e.id)).toEqual(['e3', 'e4', 'e5']);
+    store.resume();
+    expect(store.events.value.map((e) => e.id)).toEqual(['e3', 'e4', 'e5']);
   });
 
   it('buffers while paused and drains on resume preserving order', () => {
@@ -76,7 +85,7 @@ describe('createEventStore', () => {
     store.resume();
     expect(store.paused.value).toBe(false);
     expect(store.pausedBuffer.value).toHaveLength(0);
-    expect(store.events.value.map((e) => e.id)).toEqual(['e3', 'e2', 'e1']);
+    expect(store.events.value.map((e) => e.id)).toEqual(['e1', 'e2', 'e3']);
   });
 
   it('collapses a repeat of an id it already holds into one entry', () => {
@@ -85,7 +94,7 @@ describe('createEventStore', () => {
     store.ingest(log(2));
     // Same event redelivered — backfill GET overlapping the live WS stream.
     store.ingest(log(1));
-    expect(store.events.value.map((e) => e.id)).toEqual(['e2', 'e1']);
+    expect(store.events.value.map((e) => e.id)).toEqual(['e1', 'e2']);
   });
 
   it('keeps the later copy when one id arrives twice, in its original position', () => {
@@ -96,7 +105,7 @@ describe('createEventStore', () => {
     store.ingest(log(9));
     store.ingest(http('r1', 200, 900));
     const ids = store.events.value.map((e) => e.id);
-    expect(ids).toEqual(['e9', 'r1']);
+    expect(ids).toEqual(['r1', 'e9']);
     const kept = store.events.value.find((e) => e.id === 'r1') as unknown as {
       response: { statusCode: number };
       durationMs: number;
@@ -113,7 +122,7 @@ describe('createEventStore', () => {
     store.ingest(log(2));
     expect(store.pausedBuffer.value.map((e) => e.id)).toEqual(['e2']);
     store.resume();
-    expect(store.events.value.map((e) => e.id)).toEqual(['e2', 'e1']);
+    expect(store.events.value.map((e) => e.id)).toEqual(['e1', 'e2']);
   });
 
   it('replaces inside the paused buffer while paused', () => {
@@ -129,9 +138,9 @@ describe('createEventStore', () => {
     const store = createEventStore({ maxEvents: 3 });
     for (let i = 0; i < 3; i++) store.ingest(log(i));
     store.ingest(log(3)); // evicts e0
-    expect(store.events.value.map((e) => e.id)).toEqual(['e3', 'e2', 'e1']);
+    expect(store.events.value.map((e) => e.id)).toEqual(['e1', 'e2', 'e3']);
     store.ingest(log(0)); // e0 is no longer held, so it is a new event again
-    expect(store.events.value.map((e) => e.id)).toEqual(['e0', 'e3', 'e2']);
+    expect(store.events.value.map((e) => e.id)).toEqual(['e2', 'e3', 'e0']);
   });
 
   it('re-ingests after a clear, and undo restores dedup state', () => {
@@ -156,6 +165,6 @@ describe('createEventStore', () => {
     store.clearLocal();
     expect(store.events.value).toHaveLength(0);
     expect(store.undoClear()).toBe(true);
-    expect(store.events.value.map((e) => e.id)).toEqual(['e2', 'e1']);
+    expect(store.events.value.map((e) => e.id)).toEqual(['e1', 'e2']);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCurl } from '../keyboard';
+import { buildCurl, nextSelectionIndex } from '../keyboard';
 import type { HttpEvent } from '../../transport/schema';
 
 describe('buildCurl', () => {
@@ -39,5 +39,27 @@ describe('buildCurl', () => {
       request: { ...evt.request, bodyPreview: null },
     };
     expect(buildCurl(plain)).not.toContain('--data-binary');
+  });
+});
+
+describe('nextSelectionIndex', () => {
+  it('lands on the top row when nothing is selected', () => {
+    expect(nextSelectionIndex(-1, 5, 'selectNext')).toBe(0);
+    expect(nextSelectionIndex(-1, 5, 'selectPrev')).toBe(0);
+  });
+
+  it('moves one row down for next and one up for prev', () => {
+    expect(nextSelectionIndex(2, 5, 'selectNext')).toBe(3);
+    expect(nextSelectionIndex(2, 5, 'selectPrev')).toBe(1);
+  });
+
+  it('clamps at both ends without wrapping', () => {
+    expect(nextSelectionIndex(4, 5, 'selectNext')).toBe(4);
+    expect(nextSelectionIndex(0, 5, 'selectPrev')).toBe(0);
+  });
+
+  it('stays put on a single-element list', () => {
+    expect(nextSelectionIndex(0, 1, 'selectNext')).toBe(0);
+    expect(nextSelectionIndex(0, 1, 'selectPrev')).toBe(0);
   });
 });

@@ -153,8 +153,8 @@ the thicker rail tells power users where focus lives; the mouse state is softer.
 
 ### Live streaming behavior
 
-- New events append to the top (newest first) OR bottom (oldest first) based on a setting. Default: newest first.
-- When user has scrolled away from the head, show a "Jump to latest · N new" pill bottom-center of the list. Click or `g` to snap back.
+- New events append to the **bottom** (oldest first, newest last). There is no direction setting — the original spec called for one defaulting to newest-first, but prepending shifts every existing row down on each arrival, which forced the virtual list into scroll compensation that was the source of several position bugs. Appending leaves existing rows' offsets untouched. See issue #4.
+- When user has scrolled away from the tail, show a "Jump to latest · N new" pill bottom-center of the list. Click or `g` to snap back.
 - When paused: new events buffer but don't render. TopBar shows a pulsing amber dot and an "N buffered" chip. Resuming flushes in order.
 
 ### Filter interactions

@@ -2,6 +2,11 @@
  * Fixed-row-height windowing. No external dep — 50-odd LOC keeps the bundle
  * lean. Overscan defaults to 10 rows: enough that j/k keyboard nav never
  * shows a blank row even when combined with a slight scroll lag.
+ *
+ * Items grow at the END (newest last). That is the mode a scroll container is
+ * built for: appending never changes an existing row's offset, so scrollTop
+ * stays valid and the user's reading position holds by itself. The only scroll
+ * compensation left is following the tail — see `pinned` below.
  */
 export interface VirtualListOptions<T> {
   readonly rowHeight: number;
@@ -11,37 +16,27 @@ export interface VirtualListOptions<T> {
   readonly keyFor: (item: T) => string;
 }
 
-/** Anchors the viewport so a specific item stays at the same visual position across a setItems call. */
-export interface ScrollAnchor {
-  /** Key of the item that should remain visually pinned. */
-  readonly key: string;
-  /** Pixels into that item where the viewport's top edge sat (0 ≤ offset < rowHeight). */
-  readonly offset: number;
-}
-
 export interface VirtualList<T> {
   readonly root: HTMLElement;
   readonly viewport: HTMLElement;
   readonly innerContent: HTMLElement;
   /**
-   * Replace items. When `options.anchor` is supplied and the anchored key is
-   * present in the new list, scrollTop is reset so that item appears at the
-   * same on-screen position (including its sub-row offset). Prevents the
-   * user's view from drifting when new items prepend while they're scrolled
-   * away from the head.
+   * Replace items. Existing rows keep their offsets, so the viewport needs no
+   * correction — except when the user is already at the tail, in which case we
+   * stay there so newly appended rows remain visible.
    */
-  setItems(items: readonly T[], options?: { anchor?: ScrollAnchor }): void;
+  setItems(items: readonly T[]): void;
   scrollToIndex(index: number): void;
+  /** Jump to the newest row and resume following the tail. */
+  scrollToEnd(): void;
   /**
    * Scroll the row at `index` just inside the viewport, but only when it is
    * currently outside it. A no-op otherwise, so keyboard nav within the visible
    * window doesn't jerk the list on every keypress.
    */
   scrollIndexIntoView(index: number): void;
-  /** True when the viewport is within `threshold` px of the top (= newest). */
-  isAtHead(thresholdPx?: number): boolean;
-  /** Snapshot of the topmost visible item so it can be restored across a setItems call. */
-  peekAnchor(): ScrollAnchor | undefined;
+  /** True while the newest (last) row is at least partly visible. */
+  isNewestRowVisible(): boolean;
   onScroll(listener: () => void): () => void;
   /** Drop all pooled row elements; next render rebuilds them from scratch. */
   invalidateAll(): void;
@@ -72,18 +67,50 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
   const pool = new Map<string, { el: HTMLElement; item: T }>();
   const scrollListeners = new Set<() => void>();
 
-  // Anchor restore: when prepending grows innerContent.height, Chromium fires a
-  // spurious scroll event that resets scrollTop to 0 *between* our synchronous
-  // set and the next paint. Two cooperating pieces of state defend against it:
+  // True while the viewport sits at the bottom. Appended rows extend the content
+  // below the viewport, which would otherwise leave the user drifting upward away
+  // from live events, so we re-pin whenever the content or the viewport size
+  // changes. Otherwise recomputed from the real scroll position on every scroll
+  // event, so it can never disagree with what the user sees.
+  let pinned = true;
+
+  // Chromium reverts scrollTop after a content-size change lands and then fires a
+  // scroll event carrying the reverted value. Appending is NOT immune to this —
+  // it is the same stomp the old viewport-anchor lock existed for, measured here
+  // as scrollTop 39 → 0 one frame after the write. Unguarded, that phantom event
+  // reads as "the user scrolled to the top" and clears the pin for good.
   //
-  //   expectedScrollTop — set during a setItems call, cleared in the rAF that
-  //     follows; the scroll listener uses it to detect/repair browser stomps.
-  //
-  //   lastSetScrollTop — survives between setItems calls. Used by peekAnchor
-  //     so that, if a second event arrives in the same frame before the rAF
-  //     has run, we don't re-anchor against a freshly-stomped scrollTop=0.
-  let expectedScrollTop: number | null = null;
-  let lastSetScrollTop: number | null = null;
+  // Only the bottom needs defending now, so the guard is a single boolean rather
+  // than an anchor snapshot: inside the window we re-assert the bottom and
+  // swallow the event. rAF releases it in the common case; the timeout is the
+  // safety net for backgrounded tabs where rAF can be throttled indefinitely and
+  // a stuck lock would fight real user scrolling.
+  let pinLocked = false;
+
+  function distanceFromTail(): number {
+    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+  }
+
+  /**
+   * Whether the newest row is still on screen. The last row occupies the final
+   * `rowHeight` px of the content, so it is visible exactly while the gap below
+   * the viewport is smaller than one row. This — not "scrollTop is exactly at the
+   * bottom" — is what decides whether we keep following: a list resting a few px
+   * short of the end is still showing the user live events.
+   */
+  function newestRowVisible(): boolean {
+    return distanceFromTail() < opts.rowHeight;
+  }
+
+  function pinIfNeeded(): void {
+    if (!pinned) return;
+    if (viewport.scrollHeight <= viewport.clientHeight) return;
+    viewport.scrollTop = viewport.scrollHeight;
+    pinLocked = true;
+    const release = () => { pinLocked = false; };
+    requestAnimationFrame(release);
+    setTimeout(release, 250);
+  }
 
   function render(): void {
     const total = items.length * opts.rowHeight;
@@ -137,63 +164,41 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
   }
 
   viewport.addEventListener('scroll', () => {
-    // If we're inside the lock window and the browser has stomped on us,
-    // immediately re-pin and swallow the spurious event so external listeners
-    // (atHead, etc.) don't see the transient 0.
-    if (expectedScrollTop != null && viewport.scrollTop !== expectedScrollTop) {
-      viewport.scrollTop = expectedScrollTop;
+    if (pinLocked && pinned && !newestRowVisible()) {
+      viewport.scrollTop = viewport.scrollHeight;
       render();
       return;
     }
-    // Genuine scroll (user input or our own re-pin landing). Mirror the new
-    // value into lastSetScrollTop so future peekAnchor calls see the truth.
-    lastSetScrollTop = viewport.scrollTop;
+    pinned = newestRowVisible();
     render();
     for (const l of scrollListeners) l();
   });
-  const ro = new ResizeObserver(render);
+  // Also re-pins on the first layout pass: clientHeight is 0 until then, so the
+  // initial setItems cannot compute a meaningful bottom.
+  const ro = new ResizeObserver(() => {
+    pinIfNeeded();
+    render();
+  });
   ro.observe(viewport);
 
   return {
     root,
     viewport,
     innerContent,
-    setItems(next, options) {
+    setItems(next) {
       items = next;
-      // Grow innerContent before moving scrollTop so the new range is valid.
+      // Grow innerContent before touching scrollTop so the new bottom is valid.
       innerContent.style.height = `${items.length * opts.rowHeight}px`;
-      // Compute the scrollTop to lock in across this setItems call. Anchor key
-      // present + found → move to its new pixel position. Otherwise keep the
-      // current scrollTop. We pin in either case so the browser's post-layout
-      // reset can't silently send us back to 0.
-      const anchor = options?.anchor;
-      let target = viewport.scrollTop;
-      if (anchor != null) {
-        const idx = items.findIndex((it) => opts.keyFor(it) === anchor.key);
-        if (idx >= 0) target = idx * opts.rowHeight + anchor.offset;
-      }
-      viewport.scrollTop = target;
-      expectedScrollTop = target;
-      lastSetScrollTop = target;
-      // Belt-and-suspenders clears for expectedScrollTop: rAF for the common
-      // case where the browser fires a paint within a frame; setTimeout as a
-      // safety net for backgrounded tabs / paused devtools where rAF can be
-      // throttled indefinitely (otherwise a stale lock would re-pin every real
-      // user scroll). Whichever fires first wins; the other becomes a no-op.
-      const releaseLock = () => { expectedScrollTop = null; };
-      requestAnimationFrame(() => {
-        if (expectedScrollTop != null && viewport.scrollTop !== expectedScrollTop) {
-          viewport.scrollTop = expectedScrollTop;
-        }
-        releaseLock();
-      });
-      setTimeout(releaseLock, 250);
+      pinIfNeeded();
       render();
     },
     scrollToIndex(index) {
-      const top = index * opts.rowHeight;
-      viewport.scrollTop = top;
-      lastSetScrollTop = top;
+      viewport.scrollTop = index * opts.rowHeight;
+      render();
+    },
+    scrollToEnd() {
+      pinned = true;
+      viewport.scrollTop = viewport.scrollHeight;
       render();
     },
     scrollIndexIntoView(index) {
@@ -213,28 +218,10 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
         return;
       }
       viewport.scrollTop = target;
-      lastSetScrollTop = target;
       render();
     },
-    isAtHead(threshold = 4) {
-      return viewport.scrollTop <= threshold;
-    },
-    peekAnchor() {
-      if (items.length === 0) return undefined;
-      const rh = opts.rowHeight;
-      // Always prefer lastSetScrollTop once it has been written: it tracks
-      // BOTH our own intentional pins (setItems/scrollToIndex) AND genuine
-      // user scrolls (the scroll handler mirrors viewport.scrollTop into it).
-      // The live viewport.scrollTop, on the other hand, can be transiently 0
-      // when Chromium stomps it between our set and the rAF re-pin — reading
-      // it directly there would silently anchor against the head.
-      const st = lastSetScrollTop ?? viewport.scrollTop;
-      const raw = Math.floor(st / rh);
-      const clamped = Math.max(0, Math.min(items.length - 1, raw));
-      return {
-        key: opts.keyFor(items[clamped]!),
-        offset: st - clamped * rh,
-      };
+    isNewestRowVisible() {
+      return newestRowVisible();
     },
     onScroll(listener) {
       scrollListeners.add(listener);
