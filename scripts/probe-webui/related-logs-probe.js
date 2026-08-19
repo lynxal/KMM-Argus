@@ -1,10 +1,11 @@
 // Regression probe: the Related Logs panel is reachable from every member of a
-// correlation group, not only from the HTTP call.
+// correlation group, and lists the whole group rather than only its logs.
 //
 // Before this, LOG_TABS had no Related Logs entry. Following a log out of an HTTP
 // call's Related Logs list therefore selected an event that could not answer the
 // question being asked — the tab vanished mid-walk and the rest of the group
-// became unreachable without going back to the call.
+// became unreachable without going back to the call. The panel also filtered to
+// logs, so a log could never lead back to the request it ran under.
 //
 // Usage:  node related-logs-probe.js
 //
@@ -22,10 +23,12 @@ const t0 = Date.now();
 const ts = () => ((Date.now() - t0) / 1000).toFixed(3) + 's';
 const log = (...a) => console.log(ts(), ...a);
 
-// One call plus three logs in its scope, and one log outside any scope. The
-// group is deliberately larger than two so "the group minus me" is a distinct
-// answer from "the whole group".
+// Two calls plus three logs in one scope — the shape the sample app's
+// "Correlated pair" button produces — and one log outside any scope. The group is
+// deliberately larger than two so "the group minus me" is a distinct answer from
+// "the whole group", and mixed so a logs-only panel cannot pass.
 const CORRELATED_LOGS = ['alpha', 'beta', 'gamma'];
+const GROUP_SIZE = 5;
 const EVENTS = [
     {
         type: 'HttpEvent',
@@ -36,6 +39,17 @@ const EVENTS = [
         durationMs: 5,
         correlationId: CID,
         request: { method: 'GET', url: 'https://probe.example/users/1', host: 'probe.example', path: '/users/1', headers: [] },
+        response: { statusCode: 200, statusText: 'OK', headers: [] },
+    },
+    {
+        type: 'HttpEvent',
+        id: 'call-2',
+        timestamp: 1_004,
+        source: 'HTTP',
+        engine: 'ktor',
+        durationMs: 7,
+        correlationId: CID,
+        request: { method: 'GET', url: 'https://probe.example/posts', host: 'probe.example', path: '/posts', headers: [] },
         response: { statusCode: 200, statusText: 'OK', headers: [] },
     },
     ...CORRELATED_LOGS.map((name, i) => ({
@@ -81,7 +95,11 @@ function pageActiveTab() {
 
 function pageRelatedLines() {
     const panel = document.querySelector('[data-related-logs]');
-    return panel ? [...panel.querySelectorAll('button')].map((b) => b.textContent.trim()) : [];
+    if (!panel) return [];
+    return [...panel.querySelectorAll('button')].map((b) => ({
+        kind: b.dataset.relatedKind,
+        text: b.textContent.trim(),
+    }));
 }
 
 // --- assertions ------------------------------------------------------------
@@ -145,8 +163,13 @@ function check(name, ok, detail) {
         await page.waitForTimeout(SETTLE_MS);
         let lines = await page.evaluate(pageRelatedLines);
         check(
-            'the call lists every log in its scope',
-            lines.length === CORRELATED_LOGS.length,
+            'the call lists the whole group minus itself',
+            lines.length === GROUP_SIZE - 1,
+            JSON.stringify(lines),
+        );
+        check(
+            'the group includes the sibling call, not just logs',
+            lines.some((l) => l.kind === 'HTTP') && lines.some((l) => l.kind === 'LOG'),
             JSON.stringify(lines),
         );
 
@@ -169,7 +192,12 @@ function check(name, ok, detail) {
         lines = await page.evaluate(pageRelatedLines);
         check(
             'the log lists its group minus itself',
-            lines.length === CORRELATED_LOGS.length - 1 && !lines.some((l) => l.includes('alpha')),
+            lines.length === GROUP_SIZE - 1 && !lines.some((l) => l.text.includes('alpha')),
+            JSON.stringify(lines),
+        );
+        check(
+            'the log can see the calls it ran under',
+            lines.filter((l) => l.kind === 'HTTP').length === 2,
             JSON.stringify(lines),
         );
 
@@ -180,8 +208,23 @@ function check(name, ok, detail) {
         check(
             'a second hop works the same way',
             (await page.evaluate(pageActiveTab)) === 'Related Logs' &&
-                lines.length === CORRELATED_LOGS.length - 1 &&
-                !lines.some((l) => l.includes('beta')),
+                lines.length === GROUP_SIZE - 1 &&
+                !lines.some((l) => l.text.includes('beta')),
+            JSON.stringify(lines),
+        );
+
+        // --- hopping onto a CALL keeps the tab too: detailTab is per kind ---
+        await clickRelated('/posts');
+        await page.waitForTimeout(SETTLE_MS);
+        check(
+            'hopping onto a call lands on the same tab',
+            (await page.evaluate(pageActiveTab)) === 'Related Logs',
+            await page.evaluate(pageActiveTab),
+        );
+        lines = await page.evaluate(pageRelatedLines);
+        check(
+            'the call reached by a hop lists the rest of the group',
+            lines.length === GROUP_SIZE - 1 && !lines.some((l) => l.text.includes('/posts')),
             JSON.stringify(lines),
         );
 
@@ -196,7 +239,7 @@ function check(name, ok, detail) {
         );
 
         if (failures.length) throw new Error(`${failures.length} assertion(s) failed`);
-        log('OK — 8 assertions passed');
+        log(`OK — ${failures.length === 0 ? 12 : '?'} assertions passed`);
         await browser.close();
         device.close();
         process.exit(0);

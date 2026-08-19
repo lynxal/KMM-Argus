@@ -67,23 +67,26 @@ export function linkedEventIds(
   return ids;
 }
 
-export interface RelatedLogs {
-  readonly logs: LogEvent[];
+export interface RelatedEvents {
+  /** Group members other than the event asked about, in arrival order. */
+  readonly events: ArgusEvent[];
   /**
-   * The scope the logs were matched on, or null when the event carries none — in
-   * which case there is nothing to relate and `logs` is empty.
+   * The scope they were matched on, or null when the event carries none — in
+   * which case there is nothing to relate and `events` is empty.
    */
   readonly correlationId: string | null;
 }
 
 /**
- * Log events belonging to `event` — those stamped with the same correlationId,
- * however far apart in time they are. `event` itself is never in the result, so a
- * log asking this question gets the rest of its own correlation group.
+ * The rest of `event`'s correlation group — everything stamped with the same
+ * correlationId, however far apart in time, minus `event` itself.
  *
- * Takes a log as readily as a call: correlationId is stamped on both, so the
- * relationship is symmetric and walking a group from any member is the same
- * question asked from a different starting point.
+ * Calls as well as logs. A group is a `withCorrelation { … }` scope, and the calls
+ * made inside one are as much a part of what happened as the lines logged around
+ * them; listing only the logs meant a log could never lead back to the call it ran
+ * under, which is usually the more useful direction. Takes a log as readily as a
+ * call — correlationId is stamped on both, so asking from any member is the same
+ * question from a different starting point.
  *
  * There is deliberately no time-based fallback. This previously matched a ±500 ms
  * window centred on the event and never read correlationId at all, which invented
@@ -92,14 +95,14 @@ export interface RelatedLogs {
  * window answers "what else happened around now", which the event list already shows
  * — logs and HTTP calls share it — so guessing here only added a false signal.
  */
-export function relatedLogEvents(
+export function relatedEvents(
   events: readonly ArgusEvent[],
   event: HttpEvent | LogEvent,
-): RelatedLogs {
+): RelatedEvents {
   const correlationId = event.correlationId ?? null;
-  if (correlationId == null) return { logs: [], correlationId: null };
+  if (correlationId == null) return { events: [], correlationId: null };
   return {
-    logs: sameCorrelation(events, correlationId, event.id).filter(isLogEvent),
+    events: sameCorrelation(events, correlationId, event.id),
     correlationId,
   };
 }

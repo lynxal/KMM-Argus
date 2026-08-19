@@ -62,11 +62,12 @@ happens in both directions.
 position from the viewport being detached and re-appended, which moves `scrollTop` with no event at
 all.
 
-## related-logs-probe.js — Related Logs reachable from every group member
+## related-logs-probe.js — Related Logs across a correlation group
 
-Regression cover for the Related Logs tab being HTTP-only. Following a log out of a call's Related
-Logs list selected an event whose tab set had no Related Logs entry, so the tab vanished mid-walk and
-the rest of the correlation group became unreachable without going back to the call.
+Regression cover for two things the Related Logs tab used to get wrong. It was HTTP-only, so
+following a log out of a call's list selected an event whose tab set had no Related Logs entry — the
+tab vanished mid-walk and the rest of the group became unreachable without going back to the call.
+And the panel filtered to log events, so a log could never lead back to the request it ran under.
 
 ```bash
 cd argus-webui && npm run build     # required — the probes serve dist/
@@ -74,10 +75,13 @@ cd ../scripts/probe-webui
 node related-logs-probe.js
 ```
 
-Backfills one call and three logs sharing a correlation id, plus one log outside any scope. Asserts
-the call still lists its whole scope; that hopping to a log keeps the tab present, active, and listing
-the group minus itself; that a second hop behaves the same; and that a log with no correlation id
-explains the empty panel instead of showing a dead tab.
+Backfills two calls and three logs sharing a correlation id — the shape the sample app's "Correlated
+pair" button produces — plus one log outside any scope. Asserts that every member lists the group
+minus itself, calls included; that hopping to a log or to a call keeps the tab present, active, and
+correct; that a second hop behaves the same; and that an event with no correlation id explains the
+empty panel instead of showing a dead tab.
+
+The mixed group is load-bearing: a logs-only panel passes a same-kind fixture.
 
 It reads the tab strip through `[data-detail-tabs]` and the panel through `[data-related-logs]`,
 structurally rather than by Tailwind class, so a restyle cannot turn a real failure into a silent
