@@ -2,7 +2,7 @@ import { effect, signal } from '@preact/signals-core';
 import type { EventStore } from '../../store/eventStore';
 import type { ArgusEvent } from '../../transport/schema';
 import { createVirtualList } from './virtual';
-import { createEventRow } from './Row';
+import { applyRowSelection, createEventRow } from './Row';
 
 export interface EventListProps {
   readonly store: EventStore;
@@ -25,12 +25,17 @@ export function createEventList({ store }: EventListProps): HTMLElement {
 
   const list = createVirtualList<ArgusEvent>({
     rowHeight: store.density.value === 'comfy' ? ROW_HEIGHT_COMFY : ROW_HEIGHT_COMPACT,
+    // peek(), not value(): renderRow runs inside whichever effect happened to
+    // trigger the render, and tracking these here would make that effect depend
+    // on state it doesn't manage — a selection change would re-run the items
+    // effect and re-anchor the scroll position. Each of these signals already
+    // has an effect below that rebuilds or patches the rows it affects.
     renderRow: (event) =>
       createEventRow(event, {
-        selectedId: store.selectedId.value,
-        selectionSource: store.selectionSource.value,
-        textQuery: store.filters.value.textQuery,
-        showCorrelationId: store.showCorrelationId.value,
+        selectedId: store.selectedId.peek(),
+        selectionSource: store.selectionSource.peek(),
+        textQuery: store.filters.peek().textQuery,
+        showCorrelationId: store.showCorrelationId.peek(),
         onClick: (e) => {
           store.selectionSource.value = 'mouse';
           store.selectedId.value = e.id;
@@ -93,11 +98,30 @@ export function createEventList({ store }: EventListProps): HTMLElement {
     }
   });
 
-  // Re-render all rows when selection or textQuery changes.
+  // Selection is a class-only change, so patch the live rows in place. Calling
+  // setItems here would do nothing: the virtual list reuses pooled rows keyed by
+  // event id and only re-invokes renderRow on a pool miss. Rows built later by a
+  // scroll-driven render are born correct — renderRow reads selectedId fresh.
   effect(() => {
-    void store.selectedId.value;
-    void store.selectionSource.value;
+    const id = store.selectedId.value;
+    const source = store.selectionSource.value;
+    for (const child of Array.from(list.innerContent.children)) {
+      const row = child as HTMLElement;
+      applyRowSelection(row, id != null && row.dataset['eventId'] === id, source);
+    }
+    // Keyboard nav can walk the selection past either edge of the viewport;
+    // mouse selection is by definition already visible, so leave scroll alone.
+    if (id != null && source === 'keyboard') {
+      const idx = store.filteredEvents.peek().findIndex((e) => e.id === id);
+      if (idx >= 0) list.scrollIndexIntoView(idx);
+    }
+  });
+
+  // Search highlighting is baked into the row's DOM by renderHighlighted, so the
+  // pool has to be dropped for the new query to take effect.
+  effect(() => {
     void store.filters.value.textQuery;
+    list.invalidateAll();
     list.setItems(store.filteredEvents.peek());
   });
 

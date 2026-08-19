@@ -23,9 +23,34 @@ export interface RowContext {
 }
 
 const ROW_CLASS_BASE = 'flex items-center gap-2 px-2 cursor-pointer border-b border-border-subtle text-xs font-ui';
+// Hover is applied to non-selected rows only: `.hover\:bg-bg-hover:hover` has
+// higher specificity than the flat `.bg-bg-selected*` utility, so leaving it on
+// a selected row wipes the selection tint out from under the cursor that just
+// clicked it.
 const ROW_CLASS_HOVER = 'hover:bg-bg-hover';
 const ROW_CLASS_SELECTED = 'bg-bg-selected';
-const ROW_CLASS_SELECTED_KB = 'bg-bg-selected-kb ds-row-rail';
+const ROW_CLASS_SELECTED_RAIL = 'ds-row-rail';
+const ROW_CLASS_SELECTED_KB = 'bg-bg-selected-kb';
+const ROW_CLASS_SELECTED_KB_RAIL = 'ds-row-rail-kb';
+
+/**
+ * Applies (or clears) the selection classes on a row. Every class is toggled in
+ * both directions so this is safe on a pooled row carrying stale state — the
+ * virtual list reuses row elements across renders.
+ */
+export function applyRowSelection(
+  row: HTMLElement,
+  selected: boolean,
+  source: 'keyboard' | 'mouse',
+): void {
+  const kb = selected && source === 'keyboard';
+  const mouse = selected && !kb;
+  row.classList.toggle(ROW_CLASS_HOVER, !selected);
+  row.classList.toggle(ROW_CLASS_SELECTED, mouse);
+  row.classList.toggle(ROW_CLASS_SELECTED_RAIL, mouse);
+  row.classList.toggle(ROW_CLASS_SELECTED_KB, kb);
+  row.classList.toggle(ROW_CLASS_SELECTED_KB_RAIL, kb);
+}
 
 export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement {
   const row = document.createElement('div');
@@ -127,12 +152,8 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     row.appendChild(meta);
   }
 
-  const selected = ctx.selectedId === event.id;
-  const classes = [ROW_CLASS_BASE, ROW_CLASS_HOVER];
-  if (selected) {
-    classes.push(ctx.selectionSource === 'keyboard' ? ROW_CLASS_SELECTED_KB : ROW_CLASS_SELECTED);
-  }
-  row.className = classes.join(' ');
+  row.className = ROW_CLASS_BASE;
+  applyRowSelection(row, ctx.selectedId === event.id, ctx.selectionSource);
   row.addEventListener('click', () => ctx.onClick(event));
   return row;
 }

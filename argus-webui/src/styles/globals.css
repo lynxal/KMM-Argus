@@ -538,9 +538,15 @@ kbd.ds-kbd {
   animation: argusPulse 1.2s ease-in-out infinite;
 }
 
-/* Keyboard-selected row rail — 2px border-focus inside; 6px padding-left. */
+/* Selected row rail — 2px border-focus inside, on both selection modes. */
 .ds-row-rail {
   box-shadow: inset 2px 0 0 0 var(--border-focus);
+}
+
+/* Keyboard-selected row rail — thicker than the mouse rail so the two selection
+   modes still read differently at a glance. */
+.ds-row-rail-kb {
+  box-shadow: inset 3px 0 0 0 var(--border-focus);
 }
 
 /* Modal presets — widths match the handoff specs. */

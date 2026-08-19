@@ -52,8 +52,8 @@ Two panels, 50/50 split.
 - **Left: EventList.** Single column, each row 28 px (compact) or 32 px (comfy).
   - Row layout: `[SrcBadge] [method or LEVEL] [status pill or —] [primary text, ellipsized] [meta: duration or timestamp]`.
   - Primary text: host in `fg-3`, path in `fg-1` (for HTTP); message in `fg-1` with `[tag]` in `fg-3` (for LOG); event name for CUSTOM.
-  - Selection: `bg-selected-kb` + 2 px left rail in `border-focus` when selected via keyboard; `bg-selected` without the rail when selected via mouse.
-  - Hover (mouse, non-selected): `bg-subtle`.
+  - Selection: `bg-selected-kb` + 3 px left rail in `border-focus` when selected via keyboard; `bg-selected` + 2 px rail in the same colour when selected via mouse.
+  - Hover (mouse, non-selected): `bg-subtle`. Never applied to the selected row — it would wash the selection tint out from under the cursor that just clicked it.
   - Dividers: 1 px `border-subtle` between rows.
   - Jump-to-latest pill appears bottom-center when new events arrive while scrolled up.
 - **Right: EventDetail.** Tabbed view at the top, content below.
@@ -144,10 +144,12 @@ All of these should work when focus is anywhere except inside a text input:
 
 Selection style differs by input source:
 
-- **Keyboard selection** → `bg-selected-kb` background + 2 px `border-focus` left rail
-- **Mouse selection** → `bg-selected` background, no rail
+- **Keyboard selection** → `bg-selected-kb` background + 3 px `border-focus` left rail
+- **Mouse selection** → `bg-selected` background + 2 px `border-focus` left rail
 
-This distinction is intentional — the keyboard rail tells power users where focus lives; the mouse bg is softer.
+Both modes get a rail: the background tint alone is too quiet to find at a glance while events stream
+in. The distinction is intentional and lives in the rail's weight plus the stronger keyboard tint —
+the thicker rail tells power users where focus lives; the mouse state is softer.
 
 ### Live streaming behavior
 
@@ -259,6 +261,6 @@ No other imagery is used — all icons are inline SVG, defined in `argus/Primiti
 - **Start with the tokens.** Port `colors_and_type.css` first (or its equivalent in your framework's token system) so everything downstream stays consistent.
 - **Build `SrcBadge`, `Kbd`, and `Icon` early.** They appear in nearly every view.
 - **The event row is the atom of the whole UI** — getting its layout, typography, and selection states exactly right unlocks the list, waterfall gutter, and log detail simultaneously.
-- **Don't skip the keyboard/mouse selection distinction.** It's subtle visually but matters a lot to the feel.
+- **Don't skip the keyboard/mouse selection distinction.** It's subtle visually but matters a lot to the feel. Rail weight is what carries it — don't collapse both modes onto one rail.
 - **Model the filter state as a single `filters` object** and pipe all predicates through one `applyFilters(events, filters)` function — makes testing and the "clear all" action trivial.
 - **The Waterfall time axis should be derived from visible events**, not fixed — zoom-out lets long traces fit; zoom-in magnifies a cluster.
