@@ -95,14 +95,65 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   let lastClearAt = 0;
   const UNDO_WINDOW_MS = 6_000;
 
+  // Ids currently held by `events` + `pausedBuffer`. One id can arrive more than
+  // once: a redirected Ktor request emits one event per hop and every hop carries
+  // the id minted for the first one, so a 302 followed by a 200 shows up as two
+  // events sharing an id. The backfill GET overlapping the live WS stream does the
+  // same. Two entries with one id rendered as two rows, both highlighted, and
+  // keyboard nav (which resolves the selection with findIndex) jumped back to the
+  // first copy.
+  //
+  // The repeat REPLACES the entry it collides with, in place, rather than being
+  // dropped: for a redirect chain the later hop is the meaningful one (the real
+  // status and body), and for a re-delivered event the two copies are identical
+  // so replacing is a no-op. Keeping the position stops rows from jumping.
+  const seenIds = new Set<string>();
+
+  /** Forget ids that fell off the end of a capped list so the set can't grow unbounded. */
+  function forget(dropped: readonly ArgusEvent[]): void {
+    for (const e of dropped) seenIds.delete(e.id);
+  }
+
+  /** Replace an already-held event with a later copy of itself. */
+  function replace(event: ArgusEvent): void {
+    const inEvents = events.value.findIndex((e) => e.id === event.id);
+    if (inEvents >= 0) {
+      const next = events.value.slice();
+      next[inEvents] = event;
+      events.value = next;
+      return;
+    }
+    const inBuffer = pausedBuffer.value.findIndex((e) => e.id === event.id);
+    if (inBuffer >= 0) {
+      const next = pausedBuffer.value.slice();
+      next[inBuffer] = event;
+      pausedBuffer.value = next;
+    }
+  }
+
   function ingest(event: ArgusEvent): void {
+    if (seenIds.has(event.id)) {
+      replace(event);
+      return;
+    }
+    seenIds.add(event.id);
     if (paused.value) {
       const buf = pausedBuffer.value;
-      pausedBuffer.value = buf.length >= maxEvents ? [event, ...buf.slice(0, maxEvents - 1)] : [event, ...buf];
+      if (buf.length >= maxEvents) {
+        forget(buf.slice(maxEvents - 1));
+        pausedBuffer.value = [event, ...buf.slice(0, maxEvents - 1)];
+      } else {
+        pausedBuffer.value = [event, ...buf];
+      }
       return;
     }
     const next = events.value;
-    events.value = next.length >= maxEvents ? [event, ...next.slice(0, maxEvents - 1)] : [event, ...next];
+    if (next.length >= maxEvents) {
+      forget(next.slice(maxEvents - 1));
+      events.value = [event, ...next.slice(0, maxEvents - 1)];
+    } else {
+      events.value = [event, ...next];
+    }
   }
 
   function pause(): void {
@@ -114,7 +165,12 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     const buf = pausedBuffer.value;
     if (buf.length > 0) {
       const merged = [...buf, ...events.value];
-      events.value = merged.length > maxEvents ? merged.slice(0, maxEvents) : merged;
+      if (merged.length > maxEvents) {
+        forget(merged.slice(maxEvents));
+        events.value = merged.slice(0, maxEvents);
+      } else {
+        events.value = merged;
+      }
       pausedBuffer.value = [];
     }
     paused.value = false;
@@ -125,6 +181,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     lastClearAt = Date.now();
     events.value = [];
     pausedBuffer.value = [];
+    seenIds.clear();
     selectedId.value = null;
   }
 
@@ -135,6 +192,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
       return false;
     }
     events.value = [...lastClearSnapshot];
+    for (const e of lastClearSnapshot) seenIds.add(e.id);
     lastClearSnapshot = null;
     return true;
   }
