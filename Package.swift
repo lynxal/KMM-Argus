@@ -24,7 +24,7 @@ let package = Package(
         .binaryTarget(
             name: "argus_ios",
             url: "https://github.com/lynxal/KMM-Argus/releases/download/1.0.0/argus_ios.xcframework.zip",
-            checksum: "PLACEHOLDER_REPLACE_PER_RELEASE"
+            checksum: "de5a81355dc605c193e5907a7698a908fce83144a6a145ada13faa547da8dd8f"
         ),
     ]
 )
