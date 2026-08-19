@@ -12,6 +12,7 @@ In practice, that means: in-app debug tooling for Kotlin Multiplatform apps. Arg
 - **Real-time push** — REST + WebSocket from the embedded server; the web UI updates as events arrive.
 - **Header redaction** — `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization` redacted by default; configurable.
 - **Debug-only by construction** — release builds contain zero Argus classes (CI gate enforces this). See [§3](#3-debug-only-distribution-model).
+- **Never crashes the host app** — every failure path degrades instead of throwing: an unavailable port, an unopenable database, a teardown error. Tested on Android and iOS. See [§9.3](#93-lifecycle--start-stop-and-the-never-crash-contract).
 
 ## 2. Status
 
@@ -69,6 +70,12 @@ interface DebugTools {
     fun buildHttpClient(): HttpClient
     fun installLogging()
     fun observeArgusUrl(): StateFlow<String?>
+
+    /** Why the inspector isn't up, or null. A String so no Argus type crosses the seam. */
+    fun observeArgusError(): StateFlow<String?>
+
+    /** Stop the inspector and release its port. Safe to call twice, or before bind. No-op in release. */
+    fun stopArgus()
 
     /** Emit a CustomEvent through the sample's bus. No-op in release. */
     fun publishCustom(source: String, label: String, payload: String)
@@ -169,6 +176,10 @@ class DebugToolsImpl(private val app: Application) : DebugTools {
 
     override fun observeArgusUrl(): StateFlow<String?> = argus.url
 
+    override fun stopArgus() {
+        argus.stop()
+    }
+
     override fun publishCustom(source: String, label: String, payload: String) {
         argus.eventBus.publishCustom(
             source = source,
@@ -256,6 +267,10 @@ class DebugToolsImpl(@Suppress("unused") private val app: Application) : DebugTo
     }
 
     override fun observeArgusUrl(): StateFlow<String?> = empty
+
+    override fun stopArgus() {
+        // no-op in release
+    }
 
     override fun publishCustom(source: String, label: String, payload: String) {
         // no-op in release
@@ -441,6 +456,10 @@ class DebugToolsImpl : DebugTools {
 
     override fun observeArgusUrl(): StateFlow<String?> = argus.url
 
+    override fun stopArgus() {
+        argus.stop()
+    }
+
     override fun publishCustom(source: String, label: String, payload: String) {
         argus.eventBus.publishCustom(
             source = source,
@@ -498,6 +517,7 @@ class DebugToolsImpl : DebugTools {
     override fun buildHttpClient(): HttpClient = HttpClient(Darwin)
     override fun installLogging() { Logger.add(DebugLoggerImplementation()) }
     override fun observeArgusUrl(): StateFlow<String?> = empty
+    override fun stopArgus() {}
     override fun publishCustom(source: String, label: String, payload: String) {}
     override fun fireOkHttpCall(url: String) {}
     override fun fireUrlConnectionCall(url: String) {}
@@ -594,6 +614,20 @@ debugTools.observeArgusUrl().collect { url ->
 }
 ```
 
+**Surface `startupError` too.** If the server can't bind — a pinned port already taken is the usual
+cause — `url` simply stays `null`, which is indistinguishable from "still starting". `ArgusHandle`
+exposes the reason as a second flow, so plumb it through the same seam and show it next to the URL:
+
+```kotlin
+// debug DebugToolsImpl
+override fun observeArgusError(): StateFlow<String?> = argus.startupError
+    .map { it?.message }
+    .stateIn(scope, SharingStarted.Eagerly, null)
+```
+
+A bind failure never takes the host app down; it is reported and nothing else. See
+[§12](#12-troubleshooting) for the port-conflict case and `portFallback`.
+
 If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's LAN IP and the configured port directly in the browser.
 
 ## 8. UI walkthrough
@@ -624,7 +658,8 @@ Argus has two config surfaces: **server-side** (`Argus.start { ... }`) for the i
 
 | Option | Default | Description |
 |---|---|---|
-| `port` | `0` (OS-assigned) | TCP port for the embedded server. Pin (e.g. `8787`) for a stable URL — `start()` fails if a pinned port is in use. |
+| `port` | `0` (OS-assigned) | TCP port for the embedded server. Pin (e.g. `8787`) for a stable URL. If a pinned port is already in use, the server doesn't come up and the reason lands on `ArgusHandle.startupError` — your app keeps running either way. |
+| `portFallback` | `false` | When a pinned `port` can't be bound, rebind on an OS-assigned port instead of giving up. Off by default so a fixed-port setup never silently moves; `ArgusHandle.url` always reports the port actually bound. |
 | `maxEvents` | `500` | Ring-buffer size. Older events are dropped beyond this. |
 | `maxBodyBytes` | `1_000_000` (1 MB) | Per-body capture cap. Bodies larger than this are truncated. |
 | `redactHeaders` | `["Authorization", "Cookie", "Set-Cookie", "Proxy-Authorization"]` | HTTP header names whose values are replaced with `***redacted***` before capture. |
@@ -641,6 +676,85 @@ Argus.start(application) {
     maxBodyBytes = 262_144L  // 256 KB
 }
 ```
+
+### 9.3 Lifecycle — `start()`, `stop()`, and the never-crash contract
+
+`Argus.start()` returns an `ArgusHandle`. That handle *is* the lifecycle: it carries the bound
+URL, the failure reason, the event bus your capture plugins write into, and `stop()`.
+
+```kotlin
+val argus: ArgusHandle = Argus.start(application) { port = 8787 }
+
+argus.url          // StateFlow<String?>    — "http://192.168.1.42:8787" once bound, else null
+argus.startupError // StateFlow<Throwable?> — why it isn't up, else null
+argus.eventBus     // wire into ArgusPlugin / ArgusOkHttpInterceptor / ArgusLoggerDelegate
+argus.stop()       // stop the server, release the port
+```
+
+**`start()` is non-suspending and returns immediately.** The socket binds on a background
+dispatcher, so `url` is `null` for a short while after `start()` returns. That's why it's a
+`StateFlow` and not a `String` — observe it, don't read it once. Call `start()` from your
+debug-only `Application.onCreate()` (Android) or app init (iOS).
+
+**`stop()` releases the port and is safe to call anywhere.** Specifically, it is:
+
+- **idempotent** — calling it twice does nothing the second time;
+- **safe before the bind completes** — stopping a server that is still starting does not leak
+  the socket;
+- **safe after a failed start** — nothing to tear down, nothing thrown;
+- **non-throwing** — see the contract below.
+
+It resets `url` and `startupError` to `null`. A stopped handle is spent: to run the inspector
+again, call `Argus.start()` for a fresh handle rather than reusing the old one.
+
+One caveat worth knowing: `stop()` blocks the calling thread for up to ~1.1 s while the engine
+drains in-flight requests. If you're stopping from `onDestroy()` or anywhere on the main thread
+and that matters to you, move the call to a background dispatcher.
+
+#### Starting on demand (start/stop from your debug UI)
+
+The guide above starts Argus once in `Application.onCreate()`, which is what most apps want. If you
+instead want to start and stop it from a debug menu, there's one thing to get right: **every
+`Argus.start()` creates a fresh server with a fresh event bus and a fresh ring buffer, and a
+stopped handle is spent.** Wire your capture plugins straight to `handle.eventBus` and after one
+stop/start cycle they'll still be publishing into the previous run's buffer — the inspector comes
+back up and shows nothing.
+
+Give the plugins a stable bus that forwards to whichever run is current:
+
+```kotlin
+private class SwitchableEventBus : ArgusEventBus {
+    @Volatile var target: ArgusEventBus? = null
+    override fun publish(event: ArgusEvent) {
+        target?.publish(event)   // dropped while the inspector is stopped
+    }
+}
+```
+
+Wire the plugins to that once, then on start set `bus.target = handle.eventBus` and on stop set it
+back to `null`. `:sample` does exactly this — see its debug `DebugToolsImpl` for the whole thing,
+including mirroring `url`/`startupError` onto flows that outlive an individual run.
+
+#### The never-crash contract
+
+**Argus must never take the host app down.** It is a debugging aid — a failure inside it is never
+worth a crash in your app. Concretely, and covered by tests on both Android and iOS:
+
+| Situation | What happens |
+|---|---|
+| Pinned port already in use | `startupError` is set, `url` stays `null`, app runs on. With `portFallback = true`, rebinds on a free port instead. |
+| Any other bind failure | Same — the handling is errno-agnostic. |
+| Engine dies after a successful bind | Reported to `startupError`. |
+| The persistence DB can't be opened or migrated | Logged, and Argus continues **in-memory** with `persist` effectively off. |
+| Anything at all during `stop()` | Logged and swallowed. |
+
+The one thing that *does* throw is `ArgusServer.boundPort` when read before a successful start —
+it's a programming error, not a runtime condition. Read `handle.url` instead.
+
+This is a contract, not a best effort, so **surface `startupError` in your debug UI**. Because
+Argus fails quietly by design, a silent failure looks identical to "still starting" unless you
+show the reason. `:sample` does this next to the URL — see
+[§10](#10-sample-apps) — and [§7](#7-discovering-the-device-from-your-desktop) has the snippet.
 
 ### 9.2 Client-side — capture plugins
 
@@ -668,6 +782,10 @@ cd argus
 ```
 
 Launch on a device or emulator, hit a couple of buttons, and open the URL from logcat. You should see Argus working in two minutes.
+
+**The sample does not start Argus automatically.** A status line at the top always says which state it's in — `Argus: stopped`, `Argus: starting…`, `Argus: failed to start` (with the reason beneath), or the bound URL — and a single button toggles between **Start Argus** and **Stop Argus**. That exercises the whole lifecycle from [§9.3](#93-lifecycle--start-stop-and-the-never-crash-contract), including repeated stop/start cycles, which is why the sample routes its capture plugins through a switchable bus rather than holding one run's `eventBus`.
+
+To watch the port-conflict path, get something else onto 8787 first — launch the sample twice, or `adb forward tcp:8787 tcp:8787` — then press **Start Argus**: the status line reports the conflict and the app keeps running.
 
 **iOS:** open `sample/iosApp/iosApp.xcodeproj` in Xcode and run on a simulator or device with the Debug scheme. The buttons are the same as Android; OkHttp and HttpURLConnection demos are no-ops on iOS (the engines are JVM-only).
 
@@ -725,7 +843,7 @@ flowchart LR
 
 1. **Guest Wi-Fi or AP isolation.** Many corporate / coffee-shop / hotel networks block client-to-client traffic. Use a dedicated dev network, a personal hotspot, or `adb reverse tcp:8787 tcp:8787` over USB.
 2. **Firewall.** macOS / Windows firewalls can block inbound to the device-side server. Confirm the desktop can `curl http://<device-ip>:8787/api/events`.
-3. **Port conflict.** If you pinned `port = 8787` and another process owns it, `Argus.start()` fails. Drop the pin (use `port = 0`) or pick a different port.
+3. **Port conflict.** If you pinned `port = 8787` and another process owns it — a second instance of your app, most commonly — the server doesn't start. Your app is unaffected; the bind error shows up on `ArgusHandle.startupError` and in logcat as `E/Argus: Argus start failed`. Set `portFallback = true` to rebind on a free port instead, drop the pin (`port = 0`), or pick a different port. See [§9.3](#93-lifecycle--start-stop-and-the-never-crash-contract) for the full contract.
 4. **IP changed.** The device's LAN IP can change between sessions. The logcat line is authoritative — read it fresh on each launch.
 
 **Release build fails to compile / link.** Confirm `src/release/.../debug/DebugToolsImpl.kt` exists and has the same shape as `src/debug/.../debug/DebugToolsImpl.kt` but **zero `com.lynxal.argus.*` imports**. The release-source-set file is what makes the variant compile when Argus is absent.
