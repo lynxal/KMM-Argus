@@ -13,9 +13,7 @@ export function createWaitingForEvents({ source }: { source: EventSource }): HTM
     'self-stretch flex-1 min-h-0 flex flex-col items-center justify-center gap-3 text-fg-3 font-ui text-xs';
 
   const icon = createLogoMark(40);
-  icon.classList.add('text-fg-muted', 'flex-none', 'block');
-  icon.style.width = '40px';
-  icon.style.height = '40px';
+  icon.classList.add('text-fg-muted', 'flex-none', 'block', 'w-10', 'h-10');
 
   const title = document.createElement('div');
   title.className = 'text-fg-1 text-base font-semibold';
