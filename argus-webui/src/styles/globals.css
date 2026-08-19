@@ -523,6 +523,10 @@ kbd.ds-kbd {
 
 /* Connection dot — 8px circle for the status pill. */
 .ds-conn-dot {
+  /* A bare <span> is display:inline, which ignores width/height — the dot
+     rendered 0x0 and every connection indicator was invisible, leaving the
+     pill's gap-2 as dead space that read as off-centre text. */
+  display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 999px;

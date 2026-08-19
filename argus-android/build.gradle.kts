@@ -37,11 +37,6 @@ android {
 
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
-        buildConfigField("String", "ARGUS_VERSION", "\"0.1.0\"")
-    }
-
-    buildFeatures {
-        buildConfig = true
     }
 
     compileOptions {
@@ -70,16 +65,16 @@ mavenPublishing {
     pom {
         name.set("Argus Android")
         description.set("Android entry point for Argus debug tooling — wires argus-core + argus-server-core into an Android app via debugImplementation. Release builds must contain zero classes from this artifact.")
-        url.set("https://github.com/lynxal/argus")
+        url.set("https://github.com/lynxal/KMM-Argus")
         licenses {
             license {
                 name.set("MIT License")
-                url.set("https://github.com/lynxal/argus/blob/main/LICENSE")
+                url.set("https://github.com/lynxal/KMM-Argus/blob/main/LICENSE")
             }
         }
         issueManagement {
             system.set("GitHub Issues")
-            url.set("https://github.com/lynxal/argus/issues")
+            url.set("https://github.com/lynxal/KMM-Argus/issues")
         }
         developers {
             developer {
@@ -89,9 +84,9 @@ mavenPublishing {
             }
         }
         scm {
-            connection.set("scm:git:git://github.com:lynxal/argus.git")
-            developerConnection.set("scm:git:ssh://github.com:lynxal/argus.git")
-            url.set("https://github.com/lynxal/argus")
+            connection.set("scm:git:git://github.com:lynxal/KMM-Argus.git")
+            developerConnection.set("scm:git:ssh://github.com:lynxal/KMM-Argus.git")
+            url.set("https://github.com/lynxal/KMM-Argus")
         }
     }
 }

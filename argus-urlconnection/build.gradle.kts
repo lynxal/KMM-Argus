@@ -36,16 +36,16 @@ mavenPublishing {
     pom {
         name.set("Argus HttpURLConnection")
         description.set("HttpURLConnection wrapper that publishes HTTP traffic into the shared Argus event bus.")
-        url.set("https://github.com/lynxal/argus")
+        url.set("https://github.com/lynxal/KMM-Argus")
         licenses {
             license {
                 name.set("MIT License")
-                url.set("https://github.com/lynxal/argus/blob/main/LICENSE")
+                url.set("https://github.com/lynxal/KMM-Argus/blob/main/LICENSE")
             }
         }
         issueManagement {
             system.set("GitHub Issues")
-            url.set("https://github.com/lynxal/argus/issues")
+            url.set("https://github.com/lynxal/KMM-Argus/issues")
         }
         developers {
             developer {
@@ -55,9 +55,9 @@ mavenPublishing {
             }
         }
         scm {
-            connection.set("scm:git:git://github.com:lynxal/argus.git")
-            developerConnection.set("scm:git:ssh://github.com:lynxal/argus.git")
-            url.set("https://github.com/lynxal/argus")
+            connection.set("scm:git:git://github.com:lynxal/KMM-Argus.git")
+            developerConnection.set("scm:git:ssh://github.com:lynxal/KMM-Argus.git")
+            url.set("https://github.com/lynxal/KMM-Argus")
         }
     }
 }

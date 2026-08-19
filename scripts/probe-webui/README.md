@@ -90,6 +90,32 @@ It reads the tab strip through `[data-detail-tabs]` and the panel through `[data
 structurally rather than by Tailwind class, so a restyle cannot turn a real failure into a silent
 pass. A missing strip is reported as a stale `dist/` rather than counted as a failed assertion.
 
+## version-probe.js — TopBar reports the Argus version off the wire
+
+Cover for [#8](https://github.com/lynxal/KMM-Argus/issues/8): the Web UI used to
+drop `AppInfo.argusVersion` on the floor, so nothing on screen could contradict
+the hardcoded `0.1.0` the server was reporting. Asserts the TopBar renders
+exactly the `argusVersion` the fake device sent, plus its tooltip and computed
+`display` (a Tailwind display utility beats the `hidden` attribute, so assert
+what the browser resolved rather than the attribute).
+
+Deliberately compares against `fake-device.js`'s `APP_INFO.argusVersion`, not
+against `gradle.properties` — pinning the real release version here would pass
+even if the UI painted a literal, which is the bug.
+
+Also asserts the connection dot measures 8×8 and the pill's padding is symmetric.
+`.ds-conn-dot` is a bare `<span>`, and `display: inline` ignores `width`/`height`,
+so the TopBar's dot rendered 0×0 and the pill's `gap-2` read as off-centre text.
+The five other dots in the app survived only because they are direct flex
+children, which blockifies them. The class list was always correct, so assert the
+measured box.
+
+```bash
+node version-probe.js
+```
+
+Self-contained via `fake-device.js`; needs a built UI but no device.
+
 ## fake-device.js — the in-process device both probes share
 
 Serves the built `argus-webui/dist/` plus `/api/info`, `/api/events`, and `WS /ws` on an ephemeral

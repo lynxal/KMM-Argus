@@ -28,6 +28,7 @@ const DEVICE: DeviceInfo = {
   platform: 'android',
   version: '1.4.2',
   pkg: 'com.example.app',
+  argusVersion: '1.0.0',
 };
 
 /** Store order: `ingest` appends, so the list is oldest-first. */

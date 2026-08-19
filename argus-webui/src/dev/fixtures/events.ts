@@ -217,4 +217,5 @@ export const FIXTURE_DEVICE = {
   platform: 'android' as const,
   version: '1.4.2',
   pkg: 'com.example.app',
+  argusVersion: '1.0.0',
 };

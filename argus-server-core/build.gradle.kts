@@ -90,16 +90,16 @@ mavenPublishing {
     pom {
         name.set("Argus Server Core")
         description.set("Embedded Ktor server (REST + WebSocket) that serves the Argus debug bridge to the local network. Pairs with argus-core and argus-webui-bundle.")
-        url.set("https://github.com/lynxal/argus")
+        url.set("https://github.com/lynxal/KMM-Argus")
         licenses {
             license {
                 name.set("MIT License")
-                url.set("https://github.com/lynxal/argus/blob/main/LICENSE")
+                url.set("https://github.com/lynxal/KMM-Argus/blob/main/LICENSE")
             }
         }
         issueManagement {
             system.set("GitHub Issues")
-            url.set("https://github.com/lynxal/argus/issues")
+            url.set("https://github.com/lynxal/KMM-Argus/issues")
         }
         developers {
             developer {
@@ -109,9 +109,9 @@ mavenPublishing {
             }
         }
         scm {
-            connection.set("scm:git:git://github.com:lynxal/argus.git")
-            developerConnection.set("scm:git:ssh://github.com:lynxal/argus.git")
-            url.set("https://github.com/lynxal/argus")
+            connection.set("scm:git:git://github.com:lynxal/KMM-Argus.git")
+            developerConnection.set("scm:git:ssh://github.com:lynxal/KMM-Argus.git")
+            url.set("https://github.com/lynxal/KMM-Argus")
         }
     }
 }

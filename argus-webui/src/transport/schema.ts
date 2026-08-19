@@ -154,6 +154,8 @@ export interface DeviceInfo {
   version: string;
   /** Host app applicationId / package name. */
   pkg: string;
+  /** Argus library version the device is running, from AppInfo.argusVersion. */
+  argusVersion: string;
 }
 
 /** UI-facing helpers — label/category maps kept next to the wire types. */

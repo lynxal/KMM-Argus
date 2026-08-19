@@ -1,9 +1,13 @@
+import com.codingfeline.buildkonfig.compiler.FieldSpec.Type.STRING
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.vanniktechMavenPublish)
     alias(libs.plugins.sqldelight)
+    alias(libs.plugins.buildkonfig)
     id("signing")
 }
 
@@ -81,6 +85,34 @@ android {
     }
 }
 
+// ─── Generated library version ───────────────────────────────────────────────
+// The version Argus reports at runtime is stamped from gradle.properties →
+// argus.version, the same property every module's coordinates(…) reads. Exposed
+// as a public object so :argus-android and :argus-ios can read it; BuildKonfig
+// generates an internal one by default. Never hardcode the version —
+// :verifyVersionPins fails the build if a literal reappears.
+val generateBuildKonfigTask = tasks.named("generateBuildKonfig")
+
+buildkonfig {
+    packageName = "com.lynxal.argus.model"
+    exposeObjectWithName = "ArgusBuildKonfig"
+
+    defaultConfigs {
+        buildConfigField(STRING, "ARGUS_VERSION", providers.gradleProperty("argus.version").get())
+    }
+}
+
+// BuildKonfig adds its output as a commonMain srcDir but declares no task
+// dependency anywhere — it relies on Gradle inferring one from the Provider it
+// passes to srcDir, which does not happen here. The generated file therefore
+// resolves only if generateBuildKonfig happened to have run before, so a clean
+// build fails with "Unresolved reference 'ArgusBuildKonfig'" in :argus-android
+// and :argus-ios. Declare the dependency explicitly, for every compile task type
+// (JVM, Android variants, and Native all implement KotlinCompilationTask) plus
+// the per-target sourcesJar tasks the publish uses.
+tasks.withType<KotlinCompilationTask<*>>().configureEach { dependsOn(generateBuildKonfigTask) }
+tasks.withType<Jar>().configureEach { dependsOn(generateBuildKonfigTask) }
+
 mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
@@ -91,16 +123,16 @@ mavenPublishing {
     pom {
         name.set("Argus Core")
         description.set("Shared data model, event bus, and capture APIs for Argus — the in-app debug tooling library for Lynxal Kotlin Multiplatform projects.")
-        url.set("https://github.com/lynxal/argus")
+        url.set("https://github.com/lynxal/KMM-Argus")
         licenses {
             license {
                 name.set("MIT License")
-                url.set("https://github.com/lynxal/argus/blob/main/LICENSE")
+                url.set("https://github.com/lynxal/KMM-Argus/blob/main/LICENSE")
             }
         }
         issueManagement {
             system.set("GitHub Issues")
-            url.set("https://github.com/lynxal/argus/issues")
+            url.set("https://github.com/lynxal/KMM-Argus/issues")
         }
         developers {
             developer {
@@ -110,9 +142,9 @@ mavenPublishing {
             }
         }
         scm {
-            connection.set("scm:git:git://github.com:lynxal/argus.git")
-            developerConnection.set("scm:git:ssh://github.com:lynxal/argus.git")
-            url.set("https://github.com/lynxal/argus")
+            connection.set("scm:git:git://github.com:lynxal/KMM-Argus.git")
+            developerConnection.set("scm:git:ssh://github.com:lynxal/KMM-Argus.git")
+            url.set("https://github.com/lynxal/KMM-Argus")
         }
     }
 }

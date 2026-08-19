@@ -25,7 +25,7 @@ class FakeWebSocket {
   }
 }
 
-const APP_INFO = { pkg: 'com.example.app', versionName: '1.0', device: 'Pixel' };
+const APP_INFO = { pkg: 'com.example.app', versionName: '1.0', device: 'Pixel', argusVersion: '1.0.0' };
 
 function jsonResponse(body: unknown) {
   return { ok: true, json: async () => body };

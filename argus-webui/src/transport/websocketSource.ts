@@ -69,6 +69,7 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
       platform: 'android',
       version: info.versionName,
       pkg: info.pkg,
+      argusVersion: info.argusVersion,
     };
   }
 
