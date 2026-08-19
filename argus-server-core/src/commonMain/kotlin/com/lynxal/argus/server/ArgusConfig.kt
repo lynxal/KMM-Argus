@@ -21,8 +21,9 @@ public val DEFAULT_REDACTED_HEADERS: Set<String> = ArgusClientConfig.DEFAULT_RED
  *
  * [port] controls the TCP port the embedded Ktor engine binds to. `0` (default) asks
  * the OS to assign a free port; any other value pins the server to that port. Use a
- * fixed value when you want a stable URL for bookmarks or `adb forward`; note that a
- * pinned port will make `start()` fail if the port is already in use.
+ * fixed value when you want a stable URL for bookmarks or `adb forward`. If a pinned
+ * port is unavailable, `start()` reports the failure through `ArgusHandle.startupError`
+ * without taking the host app down — set [portFallback] to rebind on a free port instead.
  */
 public data class ArgusConfig(
     val appInfo: AppInfo,
@@ -31,6 +32,13 @@ public data class ArgusConfig(
     val redactHeaders: Set<String> = DEFAULT_REDACTED_HEADERS,
     val corsDevOrigins: List<String> = listOf("http://localhost:5173"),
     val port: Int = 0,
+    /**
+     * Rebind on an OS-assigned port when the pinned [port] can't be bound. Only consulted
+     * when [port] is non-zero. Off by default so a fixed-port setup never silently moves;
+     * turn it on when having the inspector up matters more than the URL staying stable.
+     * [ArgusServer.boundPort] and `ArgusHandle.url` always report the port actually bound.
+     */
+    val portFallback: Boolean = false,
     /**
      * Persist captured events to disk so a process restart doesn't erase the timeline.
      * Disabled by default; opt in via `argus { persist = true }`. The platform host

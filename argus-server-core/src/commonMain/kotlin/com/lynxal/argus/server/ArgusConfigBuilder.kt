@@ -19,10 +19,14 @@ public class ArgusConfigBuilder internal constructor(private val appInfo: AppInf
     /**
      * TCP port the embedded server binds to. `0` (default) asks the OS to pick a free
      * port; any other value pins the server to that port. Use a fixed value when you
-     * need a stable URL (bookmarks, `adb forward`, etc.) — be aware `start()` will
-     * fail if the port is already in use.
+     * need a stable URL (bookmarks, `adb forward`, etc.). An unavailable pinned port
+     * surfaces on `ArgusHandle.startupError` instead of crashing the host app; see
+     * [portFallback] to rebind on a free port instead.
      */
     public var port: Int = 0
+
+    /** Rebind on a free port when the pinned [port] is taken. See [ArgusConfig.portFallback]. */
+    public var portFallback: Boolean = false
 
     /** Persist events across app restarts. See [ArgusConfig.persist]. */
     public var persist: Boolean = false
@@ -36,6 +40,7 @@ public class ArgusConfigBuilder internal constructor(private val appInfo: AppInf
         redactHeaders = redactHeaders,
         corsDevOrigins = corsDevOrigins,
         port = port,
+        portFallback = portFallback,
         persist = persist,
         persistMaxSizeMb = persistMaxSizeMb,
         persistMaxAgeDays = persistMaxAgeDays,

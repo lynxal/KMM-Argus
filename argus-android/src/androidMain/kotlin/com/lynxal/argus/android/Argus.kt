@@ -3,6 +3,7 @@
 package com.lynxal.argus.android
 
 import android.content.Context
+import android.util.Log
 import com.lynxal.argus.db.AndroidArgusDriverFactory
 import com.lynxal.argus.persistence.NoopEventStore
 import com.lynxal.argus.persistence.SqlDelightEventStore
@@ -12,6 +13,7 @@ import com.lynxal.argus.server.argusConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -43,14 +45,22 @@ public object Argus {
         val appInfo = AppInfoBuilder.from(app)
         val config = argusConfig(appInfo, configure)
         val sessionId = Uuid.random().toString()
+        // SqlDelightEventStore opens (and migrates) the DB in its constructor. A corrupt file,
+        // a full disk or a failed migration would otherwise throw straight out of the host's
+        // Application.onCreate(). Losing persistence is an acceptable degradation; crashing the
+        // app to protect a debug feature is not.
         val eventStore = if (config.persist) {
-            SqlDelightEventStore(AndroidArgusDriverFactory(app))
+            runCatching { SqlDelightEventStore(AndroidArgusDriverFactory(app)) }
+                .getOrElse { t ->
+                    Log.w(LOG_TAG, "Argus persistence unavailable — continuing in-memory", t)
+                    NoopEventStore
+                }
         } else {
             NoopEventStore
         }
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val server = ArgusServer(config, eventStore, sessionId)
-        val handle = ArgusHandle(server, scope)
+        val handle = ArgusHandle(server, scope, config.port)
         scope.launch {
             try {
                 server.start()
@@ -59,6 +69,13 @@ public object Argus {
                 handle.onFailed(t)
             }
         }
+        // Failures the engine hits after a successful bind never pass through start(), so
+        // they need their own route to the handle.
+        scope.launch {
+            server.engineError.filterNotNull().collect(handle::onFailed)
+        }
         return handle
     }
+
+    private const val LOG_TAG = "Argus"
 }
