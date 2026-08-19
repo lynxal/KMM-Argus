@@ -126,7 +126,7 @@ public val Argus: ClientPlugin<ArgusClientConfig> =
                 // channel that's been partially drained by us.
                 val captured = source.readPrefix(maxBytes)
                 if (captured.readError != null) {
-                    runCatching { emitError(bus, response.call, captured.readError) }
+                    runCatching { emitError(bus, cfg, response.call, captured.readError) }
                     val bytes = captured.bytes
                     val wrappedCall = response.call.replaceResponse { ByteReadChannel(bytes) }
                     proceedWith(wrappedCall.response)
@@ -220,6 +220,50 @@ internal fun ArgusClientConfig.toCaptureConfig(): CaptureConfig = CaptureConfig(
     captureResponseBody = captureResponseBody,
 )
 
+/**
+ * Builds the request side of an event for the hop that actually ran.
+ *
+ * A redirect is re-sent through the `Send` pipeline, not the request pipeline, so
+ * `onRequest` runs once per logical request while the receive interceptor runs once
+ * per hop. Reading the url and headers off the snapshot would report the first hop's
+ * target on every hop's event, so they come from `call.request` instead. The body can
+ * only come from the snapshot — it was captured before the content was consumed — and
+ * is carried over only while the method still matches, since a 303 rewrites the hop to
+ * a GET and drops the body.
+ */
+private fun perHopRequest(
+    cfg: ArgusClientConfig,
+    call: HttpClientCall,
+    snapshot: CapturedRequest,
+): CapturedRequest {
+    val request = call.request
+    val method = request.method.value
+    return CapturedRequest(
+        method = method,
+        url = request.url.toString(),
+        host = request.url.host,
+        path = request.url.encodedPath.ifEmpty { "/" },
+        headers = request.headers.toArgusHeaders(cfg.redactHeaders),
+        body = if (method == snapshot.method) snapshot.body else null,
+    )
+}
+
+/**
+ * Per-hop timing. `requestTime`/`responseTime` are set by the engine for the hop that
+ * produced this response, so they don't smear a redirect chain's hops together the way
+ * the request-scoped start timestamp does. Falls back to the start timestamp when an
+ * engine leaves them unset or inverted.
+ */
+private fun hopTiming(response: KtorHttpResponse, startMs: Long): Pair<Long, Long> {
+    val begin = response.requestTime.timestamp
+    val end = response.responseTime.timestamp
+    return if (begin > 0 && end >= begin) {
+        begin to (end - begin)
+    } else {
+        startMs to (Clock.System.now().toEpochMilliseconds() - startMs)
+    }
+}
+
 private fun emitSuccess(
     bus: ArgusEventBus,
     cfg: ArgusClientConfig,
@@ -231,10 +275,14 @@ private fun emitSuccess(
     if (attrs.getOrNull(ArgusEmittedKey) == true) return
     attrs.put(ArgusEmittedKey, true)
 
-    val id = attrs.getOrNull(ArgusIdKey) ?: return
+    // The id is minted per emitted event, not per request: every hop of a redirect
+    // inherits the request attributes, so an id stored there would be shared by all of
+    // them and consumers keyed by id (the webui's list rows) would collide.
+    if (attrs.getOrNull(ArgusIdKey) == null) return
+    val id = Uuid.random().toString()
     val snapshot = attrs.getOrNull(ArgusRequestSnapshotKey) ?: return
     val startMs = attrs.getOrNull(ArgusStartMsKey) ?: return
-    val durationMs = Clock.System.now().toEpochMilliseconds() - startMs
+    val (timestamp, durationMs) = hopTiming(response, startMs)
 
     val respHeaders: List<Header> = response.headers.toArgusHeaders(cfg.redactHeaders)
     val argusResponse = ArgusHttpResponse(
@@ -250,8 +298,8 @@ private fun emitSuccess(
     bus.publish(
         HttpEvent(
             id = id,
-            timestamp = startMs,
-            request = snapshot.toHttpRequest(),
+            timestamp = timestamp,
+            request = perHopRequest(cfg, call, snapshot).toHttpRequest(),
             response = argusResponse,
             error = null,
             durationMs = durationMs,
@@ -263,6 +311,7 @@ private fun emitSuccess(
 
 private fun emitError(
     bus: ArgusEventBus,
+    cfg: ArgusClientConfig,
     call: HttpClientCall,
     throwable: Throwable,
 ) {
@@ -270,7 +319,8 @@ private fun emitError(
     if (attrs.getOrNull(ArgusEmittedKey) == true) return
     attrs.put(ArgusEmittedKey, true)
 
-    val id = attrs.getOrNull(ArgusIdKey) ?: return
+    if (attrs.getOrNull(ArgusIdKey) == null) return
+    val id = Uuid.random().toString()
     val snapshot = attrs.getOrNull(ArgusRequestSnapshotKey) ?: return
     val startMs = attrs.getOrNull(ArgusStartMsKey) ?: return
     val durationMs = Clock.System.now().toEpochMilliseconds() - startMs
@@ -279,7 +329,7 @@ private fun emitError(
         HttpEvent(
             id = id,
             timestamp = startMs,
-            request = snapshot.toHttpRequest(),
+            request = perHopRequest(cfg, call, snapshot).toHttpRequest(),
             response = null,
             error = throwable.toHttpError(),
             durationMs = durationMs,
@@ -298,7 +348,8 @@ private fun emitNetworkError(
     if (attrs.getOrNull(ArgusEmittedKey) == true) return
     attrs.put(ArgusEmittedKey, true)
 
-    val id = attrs.getOrNull(ArgusIdKey) ?: return
+    if (attrs.getOrNull(ArgusIdKey) == null) return
+    val id = Uuid.random().toString()
     val snapshot = attrs.getOrNull(ArgusRequestSnapshotKey) ?: return
     val startMs = attrs.getOrNull(ArgusStartMsKey) ?: return
     val durationMs = Clock.System.now().toEpochMilliseconds() - startMs

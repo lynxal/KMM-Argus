@@ -51,9 +51,12 @@ defects that share its root cause or its symptom.
   so the pooled row would have kept rendering the 302. `virtual.ts` now stores the item alongside the
   element and rebuilds when the reference changes; `setItems` hands back the same references for
   untouched events, so only genuinely replaced rows rebuild.
-- **The library-side redirect bug is tracked separately** — `argus-core` will mint a per-hop id so
-  each hop is its own event with its own url. The webui collapse stays as a safety net for older
-  library versions.
+- **The library-side redirect bug is fixed too** — `argus-core` now mints the event id per emitted
+  event rather than per request, and builds each event's url/headers from the hop that actually ran,
+  so a redirect shows as two events with their own urls and their own timings. The webui collapse
+  stays as a safety net for apps on an older library version. Note this makes the Ktor path show
+  redirect hops while `argus-okhttp` (application-level interceptor, by design) and
+  `argus-urlconnection` (`instanceFollowRedirects`) still report one event per logical request.
 - **No DOM unit test, no new devDependency** — argus-webui's vitest runs in the default `node`
   environment with no jsdom. Verified by hand in the browser against the mock source; existing
   store/input suites must stay green.

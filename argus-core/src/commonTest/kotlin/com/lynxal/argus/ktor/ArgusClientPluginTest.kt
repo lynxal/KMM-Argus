@@ -19,6 +19,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.headersOf
@@ -61,6 +62,39 @@ class ArgusClientPluginTest {
         assertEquals("OK", e.response?.statusText)
         assertNotNull(e.durationMs)
         assertTrue(e.durationMs!! >= 0)
+    }
+
+    @Test
+    fun `redirect emits one event per hop with distinct ids and its own url`() = runTest {
+        val bus = RecordingEventBus()
+        val client = HttpClient(MockEngine { request ->
+            if (request.url.encodedPath == "/start") {
+                respond(
+                    content = "",
+                    status = HttpStatusCode.Found,
+                    headers = headersOf(HttpHeaders.Location, "https://api.example.com/final"),
+                )
+            } else {
+                respond(content = "done", status = HttpStatusCode.OK)
+            }
+        }) {
+            install(Argus) { eventBus = bus }
+        }
+
+        client.get("https://api.example.com/start")
+
+        val events = bus.httpEvents()
+        assertEquals(2, events.size, "each redirect hop is its own event")
+        assertEquals(
+            2,
+            events.map { it.id }.toSet().size,
+            "hops must not share an id — the webui keys rows by it",
+        )
+        val hops = events.sortedBy { it.response?.statusCode }
+        val redirect = hops.first { it.response?.statusCode == 302 }
+        val final = hops.first { it.response?.statusCode == 200 }
+        assertEquals("/start", redirect.request.path)
+        assertEquals("/final", final.request.path, "the final hop reports its own url")
     }
 
     @Test
