@@ -1,4 +1,5 @@
 import com.codingfeline.buildkonfig.compiler.FieldSpec.Type.STRING
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -90,6 +91,8 @@ android {
 // as a public object so :argus-android and :argus-ios can read it; BuildKonfig
 // generates an internal one by default. Never hardcode the version —
 // :verifyVersionPins fails the build if a literal reappears.
+val generateBuildKonfigTask = tasks.named("generateBuildKonfig")
+
 buildkonfig {
     packageName = "com.lynxal.argus.model"
     exposeObjectWithName = "ArgusBuildKonfig"
@@ -98,6 +101,17 @@ buildkonfig {
         buildConfigField(STRING, "ARGUS_VERSION", providers.gradleProperty("argus.version").get())
     }
 }
+
+// BuildKonfig adds its output as a commonMain srcDir but declares no task
+// dependency anywhere — it relies on Gradle inferring one from the Provider it
+// passes to srcDir, which does not happen here. The generated file therefore
+// resolves only if generateBuildKonfig happened to have run before, so a clean
+// build fails with "Unresolved reference 'ArgusBuildKonfig'" in :argus-android
+// and :argus-ios. Declare the dependency explicitly, for every compile task type
+// (JVM, Android variants, and Native all implement KotlinCompilationTask) plus
+// the per-target sourcesJar tasks the publish uses.
+tasks.withType<KotlinCompilationTask<*>>().configureEach { dependsOn(generateBuildKonfigTask) }
+tasks.withType<Jar>().configureEach { dependsOn(generateBuildKonfigTask) }
 
 mavenPublishing {
     publishToMavenCentral()
