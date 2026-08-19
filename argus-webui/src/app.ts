@@ -10,7 +10,7 @@ import { createShortcutsModal } from './components/Overlays/ShortcutsModal';
 import { createToast } from './components/Overlays/Toast';
 import { createConnectionBanner } from './components/Overlays/ConnectionBanner';
 import { createWaitingForEvents } from './components/EmptyStates/WaitingForEvents';
-import { effect } from '@preact/signals-core';
+import { computed, effect } from '@preact/signals-core';
 
 /**
  * App shell. Resolves the event source from `?device=` / `?simulate=` / the
@@ -60,10 +60,19 @@ export function mountApp(root: HTMLElement): void {
   const waiting = createWaitingForEvents({ source });
   waiting.classList.add('flex-1');
 
+  // Read through a boolean `computed`, never `store.events.value` directly: a
+  // computed only bumps its version when its VALUE changes, so this effect runs
+  // on the empty ↔ non-empty flip and not on every ingested event. Depending on
+  // the array meant re-running per event, and the body swaps the content host —
+  // which detaches the EventList's scroll viewport and re-appends it. A detached
+  // scroll container loses its offset, so scrollTop dropped to 0 while the pooled
+  // rows kept their transforms, leaving the list blank with no scroll event for
+  // anything to react to. Do not inline this back into the effect.
+  const showWaiting = computed(
+    () => store.events.value.length === 0 && source.connection.value === 'connected',
+  );
   effect(() => {
-    const empty = store.events.value.length === 0 && source.connection.value === 'connected';
-    contentHost.innerHTML = '';
-    contentHost.appendChild(empty ? waiting : split);
+    contentHost.replaceChildren(showWaiting.value ? waiting : split);
   });
 
   const shortcuts = createShortcutsModal({ bus });

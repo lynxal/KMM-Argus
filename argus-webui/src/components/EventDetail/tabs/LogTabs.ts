@@ -1,18 +1,21 @@
+import type { EventStore } from '../../../store/eventStore';
 import type { LogEvent } from '../../../transport/schema';
 import { LOG_LEVEL_LABELS } from '../../../transport/schema';
 import { createBodyViewer } from '../../BodyViewer/BodyViewer';
 import type { ShortcutBus } from '../../../input/keyboard';
 import { LEVEL_TONES } from '../../FilterBar/FilterBar.states';
+import { renderRelatedLogs } from './RelatedLogs';
 
-export const LOG_TABS = ['Message', 'Payload', 'Stack Trace', 'Raw'] as const;
+export const LOG_TABS = ['Message', 'Payload', 'Stack Trace', 'Related Logs', 'Raw'] as const;
 
 export interface LogTabsProps {
   readonly event: LogEvent;
   readonly active: string;
+  readonly store: EventStore;
   readonly bus: ShortcutBus;
 }
 
-export function createLogTabs({ event, active, bus }: LogTabsProps): HTMLElement {
+export function createLogTabs({ event, active, store, bus }: LogTabsProps): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'h-full overflow-auto p-3 flex flex-col gap-3';
 
@@ -59,6 +62,9 @@ export function createLogTabs({ event, active, bus }: LogTabsProps): HTMLElement
       }
       break;
     }
+    case 'Related Logs':
+      panel.appendChild(renderRelatedLogs(event, store));
+      break;
     case 'Raw':
       panel.appendChild(
         createBodyViewer({

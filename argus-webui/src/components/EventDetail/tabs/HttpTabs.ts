@@ -7,7 +7,7 @@ import {
 import { createBodyViewer } from '../../BodyViewer/BodyViewer';
 import { buildCurl, type ShortcutBus } from '../../../input/keyboard';
 import { redirectChain } from '../../../store/redirects';
-import { relatedLogEvents } from '../../../store/related';
+import { renderRelatedLogs } from './RelatedLogs';
 import {
   STATUS_BUCKET_DOTS,
   STATUS_BUCKET_TEXT,
@@ -261,46 +261,6 @@ function legendItem(label: string, color: string): HTMLElement {
   text.textContent = label;
   wrapper.append(swatch, text);
   return wrapper;
-}
-
-function renderRelatedLogs(event: HttpEvent, store: EventStore): HTMLElement {
-  const related = relatedLogEvents(store.events.value, event);
-  const box = document.createElement('div');
-  box.className = 'flex flex-col gap-1 font-mono text-xs';
-
-  // No correlation id means there is nothing to relate — say that, and say how to
-  // get one. Guessing from timestamps would only look like an answer.
-  if (related.correlationId == null) {
-    box.appendChild(textRow('No correlation id on this call.'));
-    box.appendChild(
-      textRow('Wrap the call in withCorrelation { … } to tie its log lines to it.'),
-    );
-    return box;
-  }
-
-  const caption = document.createElement('div');
-  caption.className = 'text-fg-3 text-xs font-ui';
-  caption.textContent = `Correlation id ${related.correlationId}`;
-  box.appendChild(caption);
-
-  if (related.logs.length === 0) {
-    box.appendChild(textRow('No log events share this correlation id.'));
-    return box;
-  }
-
-  for (const e of related.logs) {
-    const line = document.createElement('button');
-    line.type = 'button';
-    line.className =
-      'text-fg-2 truncate text-left px-1 h-5 rounded-sm hover:bg-bg-hover cursor-pointer';
-    line.textContent = `${e.level} [${e.tag ?? ''}] ${e.message}`;
-    line.addEventListener('click', () => {
-      store.selectionSource.value = 'mouse';
-      store.selectedId.value = e.id;
-    });
-    box.appendChild(line);
-  }
-  return box;
 }
 
 /**

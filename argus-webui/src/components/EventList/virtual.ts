@@ -87,6 +87,15 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
   // a stuck lock would fight real user scrolling.
   let pinLocked = false;
 
+  // The scroll position the rows currently on screen were laid out for. scrollTop
+  // can move with NO scroll event — detaching a scroll container and re-appending
+  // it drops the offset silently (issue #15) — and a scroll event is the only
+  // thing that otherwise rebuilds the window. Without this the rows stay parked
+  // wherever they were, off screen, until the user scrolls: the list reads as
+  // empty while every row is still in the DOM. Comparing against it in the pin
+  // release turns "we never rendered for this position" into something we notice.
+  let lastRenderedScrollTop = -1;
+
   function distanceFromTail(): number {
     return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
   }
@@ -107,7 +116,15 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
     if (viewport.scrollHeight <= viewport.clientHeight) return;
     viewport.scrollTop = viewport.scrollHeight;
     pinLocked = true;
-    const release = () => { pinLocked = false; };
+    // Runs twice (rAF, then the timeout) and must stay idempotent: after the
+    // first pass scrollTop matches what we rendered for, so the second does
+    // nothing. It cannot fight a real user scroll either — the scroll handler
+    // recomputes `pinned` before this ever sees the new position.
+    const release = () => {
+      pinLocked = false;
+      if (pinned && !newestRowVisible()) viewport.scrollTop = viewport.scrollHeight;
+      if (viewport.scrollTop !== lastRenderedScrollTop) render();
+    };
     requestAnimationFrame(release);
     setTimeout(release, 250);
   }
@@ -117,6 +134,7 @@ export function createVirtualList<T>(opts: VirtualListOptions<T>): VirtualList<T
     innerContent.style.height = `${total}px`;
 
     const scrollTop = viewport.scrollTop;
+    lastRenderedScrollTop = scrollTop;
     const viewportHeight = viewport.clientHeight || 1;
     const first = Math.max(0, Math.floor(scrollTop / opts.rowHeight) - overscan);
     const last = Math.min(items.length - 1, Math.ceil((scrollTop + viewportHeight) / opts.rowHeight) + overscan);
