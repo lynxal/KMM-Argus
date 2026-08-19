@@ -94,11 +94,6 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     renderHighlighted(path, event.request.path, ctx.textQuery);
     text.append(host, sep, path);
     row.appendChild(text);
-
-    const meta = document.createElement('span');
-    meta.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
-    meta.textContent = event.durationMs != null ? `${event.durationMs} ms` : '—';
-    row.appendChild(meta);
   } else if (isLogEvent(event)) {
     const level = document.createElement('span');
     const tone = LEVEL_TONES[event.level];
@@ -120,11 +115,6 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     renderHighlighted(msgEl, event.message, ctx.textQuery);
     text.append(tagEl, msgEl);
     row.appendChild(text);
-
-    const meta = document.createElement('span');
-    meta.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
-    meta.textContent = formatTime(event.timestamp);
-    row.appendChild(meta);
   } else if (isCustomEvent(event)) {
     const label = document.createElement('span');
     label.className = 'text-fg-2 font-mono w-10 truncate';
@@ -145,12 +135,9 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     renderHighlighted(payEl, event.payload, ctx.textQuery);
     text.append(nameEl, payEl);
     row.appendChild(text);
-
-    const meta = document.createElement('span');
-    meta.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
-    meta.textContent = formatTime(event.timestamp);
-    row.appendChild(meta);
   }
+
+  row.appendChild(createMetaCell(event.timestamp));
 
   row.className = ROW_CLASS_BASE;
   applyRowSelection(row, ctx.selectedId === event.id, ctx.selectionSource);
@@ -215,6 +202,19 @@ function createCorrelationCell(event: ArgusEvent): HTMLElement {
   } else {
     cell.textContent = '—';
   }
+  return cell;
+}
+
+/**
+ * Trailing meta cell — the event's wall-clock time, for every row kind. HTTP rows
+ * used to print `durationMs` here instead; one column carrying two units with no
+ * header to tell them apart reads as a time and hides when the call happened.
+ * Duration lives in the HTTP detail pane and the Waterfall.
+ */
+function createMetaCell(timestamp: number): HTMLElement {
+  const cell = document.createElement('span');
+  cell.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
+  cell.textContent = formatTime(timestamp);
   return cell;
 }
 
