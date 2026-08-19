@@ -3,6 +3,8 @@ import type { EventStore } from '../../store/eventStore';
 import type { ArgusEvent } from '../../transport/schema';
 import { createVirtualList } from './virtual';
 import { applyRowSelection, createEventRow } from './Row';
+import { unseenCount } from './EventList.states';
+import { createIconEl } from '../Primitives/Primitives';
 
 export interface EventListProps {
   readonly store: EventStore;
@@ -13,8 +15,9 @@ const ROW_HEIGHT_COMFY = 32;
 
 /**
  * Virtualized event list. Reads `store.filteredEvents`; feeds the shared
- * Row component. Jump-to-latest pill appears when the user scrolls away
- * from the head; click or `g` (future — for now button only) snaps back.
+ * Row component. Newest event sits at the bottom. Jump-to-latest pill appears
+ * when the user scrolls away from the tail; click or `g` (future — for now
+ * button only) snaps back.
  *
  * @see design_handoff_argus_inspector/argus/EventList.jsx
  */
@@ -45,28 +48,33 @@ export function createEventList({ store }: EventListProps): HTMLElement {
   });
   wrapper.appendChild(list.root);
 
-  // Auto-scroll model: `atHead` doubles as the "follow tail" flag. True by
-  // default → new events are visible as they arrive (they prepend at index 0
-  // and scrollTop=0 keeps showing them). User scrolls away → atHead flips to
-  // false → the list is anchored to the event they were looking at until they
-  // tap the pill or scroll back to the top.
-  const atHead = signal(true);
-  const hiddenCount = signal(0);
-  let lastHeadId: string | null = null;
+  // Auto-scroll model: `following` mirrors "the newest row is still visible".
+  // While it is, new events append below and the list keeps itself pinned so they
+  // stay in view. The moment the user scrolls the newest row off screen,
+  // following flips to false and the list is left alone entirely: appended rows
+  // never move the ones above them, so the reading position holds with no
+  // anchoring. `virtual.ts` owns the pinning; this signal drives the pill (shown
+  // exactly when the newest row is off screen) and the unseen count.
+  const following = signal(true);
+  const unseen = signal(0);
+  let lastSeenTailId: string | null = null;
   list.onScroll(() => {
-    atHead.value = list.isAtHead();
+    following.value = list.isNewestRowVisible();
   });
 
-  // "Follow latest" pill — visible whenever the user has scrolled away from
-  // the head, so the way back to live tail is always discoverable (count
-  // appears only when there's something new to catch up on).
+  // "Follow latest" pill — visible whenever the user has scrolled away from the
+  // tail, so the way back to live tail is always discoverable (count appears only
+  // when there's something new to catch up on). Icon and label are built once:
+  // `textContent` on the button would wipe the SVG on every update.
   const pill = document.createElement('button');
   pill.type = 'button';
   pill.className =
     'absolute bottom-2 left-1/2 -translate-x-1/2 px-3 h-7 rounded-pill bg-bg-overlay text-fg-1 shadow-md border border-border-default text-xs font-ui cursor-pointer flex items-center gap-2 transition-opacity duration-base';
+  const pillLabel = document.createElement('span');
+  pill.append(createIconEl('arrowDown', 12), pillLabel);
   pill.addEventListener('click', () => {
-    list.scrollToIndex(0);
-    atHead.value = true;
+    list.scrollToEnd();
+    following.value = true;
   });
   wrapper.appendChild(pill);
 
@@ -74,27 +82,20 @@ export function createEventList({ store }: EventListProps): HTMLElement {
 
   // Items effect — fires only when filteredEvents change (NOT on scroll).
   effect(() => {
-    const events = store.filteredEvents.value;
-    const anchor = atHead.peek() ? undefined : list.peekAnchor();
-    list.setItems(events, anchor != null ? { anchor } : undefined);
+    list.setItems(store.filteredEvents.value);
   });
 
-  // Hidden-count effect — runs when filteredEvents or atHead changes. Does
-  // NOT touch the list (keeping scroll-state mutation out of the hot path
-  // for scroll events, which otherwise re-anchor on every drag tick).
+  // Unseen-count effect — runs when filteredEvents or `following` changes. Does
+  // NOT touch the list, keeping scroll-state mutation out of the hot path for
+  // scroll events. While following, the newest event is by definition seen, so
+  // remember it as the marker to count forward from later.
   effect(() => {
     const events = store.filteredEvents.value;
-    if (atHead.value) {
-      hiddenCount.value = 0;
-      lastHeadId = events[0]?.id ?? null;
+    if (following.value) {
+      unseen.value = 0;
+      lastSeenTailId = events[events.length - 1]?.id ?? null;
     } else {
-      const prev = lastHeadId;
-      if (prev == null) {
-        hiddenCount.value = events.length;
-      } else {
-        const idx = events.findIndex((e) => e.id === prev);
-        hiddenCount.value = idx === -1 ? events.length : idx;
-      }
+      unseen.value = unseenCount(events, lastSeenTailId);
     }
   });
 
@@ -134,10 +135,10 @@ export function createEventList({ store }: EventListProps): HTMLElement {
   });
 
   effect(() => {
-    pill.style.display = atHead.value ? 'none' : '';
-    pill.textContent = hiddenCount.value > 0
-      ? `↑ Jump to latest · ${hiddenCount.value} new`
-      : '↑ Jump to latest';
+    pill.style.display = following.value ? 'none' : '';
+    pillLabel.textContent = unseen.value > 0
+      ? `Jump to latest · ${unseen.value} new`
+      : 'Jump to latest';
   });
 
   return wrapper;

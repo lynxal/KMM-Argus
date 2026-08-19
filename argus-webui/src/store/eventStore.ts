@@ -109,7 +109,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   // so replacing is a no-op. Keeping the position stops rows from jumping.
   const seenIds = new Set<string>();
 
-  /** Forget ids that fell off the end of a capped list so the set can't grow unbounded. */
+  /** Forget ids that fell off the front of a capped list so the set can't grow unbounded. */
   function forget(dropped: readonly ArgusEvent[]): void {
     for (const e of dropped) seenIds.delete(e.id);
   }
@@ -131,6 +131,9 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     }
   }
 
+  // Newest event goes last. Appending never moves an existing row, which is what
+  // lets the virtual list hold the user's reading position with no scroll
+  // compensation, so the ring-buffer cap evicts from the FRONT (oldest).
   function ingest(event: ArgusEvent): void {
     if (seenIds.has(event.id)) {
       replace(event);
@@ -140,19 +143,21 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     if (paused.value) {
       const buf = pausedBuffer.value;
       if (buf.length >= maxEvents) {
-        forget(buf.slice(maxEvents - 1));
-        pausedBuffer.value = [event, ...buf.slice(0, maxEvents - 1)];
+        const cut = buf.length - maxEvents + 1;
+        forget(buf.slice(0, cut));
+        pausedBuffer.value = [...buf.slice(cut), event];
       } else {
-        pausedBuffer.value = [event, ...buf];
+        pausedBuffer.value = [...buf, event];
       }
       return;
     }
     const next = events.value;
     if (next.length >= maxEvents) {
-      forget(next.slice(maxEvents - 1));
-      events.value = [event, ...next.slice(0, maxEvents - 1)];
+      const cut = next.length - maxEvents + 1;
+      forget(next.slice(0, cut));
+      events.value = [...next.slice(cut), event];
     } else {
-      events.value = [event, ...next];
+      events.value = [...next, event];
     }
   }
 
@@ -164,10 +169,13 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     if (!paused.value) return;
     const buf = pausedBuffer.value;
     if (buf.length > 0) {
-      const merged = [...buf, ...events.value];
+      // Buffered events are newer than everything already in the list, so they
+      // go after it; the cap drops from the front.
+      const merged = [...events.value, ...buf];
       if (merged.length > maxEvents) {
-        forget(merged.slice(maxEvents));
-        events.value = merged.slice(0, maxEvents);
+        const cut = merged.length - maxEvents;
+        forget(merged.slice(0, cut));
+        events.value = merged.slice(cut);
       } else {
         events.value = merged;
       }

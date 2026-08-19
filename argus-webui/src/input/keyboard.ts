@@ -79,6 +79,21 @@ function pickCycleNext(view: EventStore['view']['value']): EventStore['view']['v
 }
 
 /**
+ * Where j/k and the arrow keys move the selection. Purely positional: "next" is
+ * one row down the rendered list, which — with the list oldest-first — means one
+ * event newer. Clamped at both ends, no wraparound. With nothing selected
+ * (`idx < 0`) the first keypress lands on the top row.
+ */
+export function nextSelectionIndex(
+  idx: number,
+  len: number,
+  action: 'selectNext' | 'selectPrev',
+): number {
+  if (idx < 0) return 0;
+  return action === 'selectNext' ? Math.min(len - 1, idx + 1) : Math.max(0, idx - 1);
+}
+
+/**
  * Install the single global keydown listener. Returns an uninstall function.
  * Bindings skip when focus is inside an <input>/<textarea>, except Escape —
  * which always runs so users can bail out of the search input.
@@ -100,10 +115,7 @@ export function installKeyboard(
         const idx = store.selectedId.value
           ? list.findIndex((e) => e.id === store.selectedId.value)
           : -1;
-        const next =
-          action === 'selectNext'
-            ? Math.min(list.length - 1, Math.max(0, idx) + (idx < 0 ? 0 : 1))
-            : Math.max(0, idx - 1);
+        const next = nextSelectionIndex(idx, list.length, action);
         store.selectionSource.value = 'keyboard';
         store.selectedId.value = list[next]!.id;
         break;

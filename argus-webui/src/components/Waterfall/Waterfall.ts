@@ -25,10 +25,15 @@ const BASE_MS_PER_PX = 8;
 /** Browsers fail or crash on very large canvases; cap and let msPerPx grow above the base when the timeline gets too long. */
 const MAX_CANVAS_W = 16384;
 
+
 /**
  * Waterfall view — canvas for bars + ticks, DOM for the hovered tooltip and
  * selection rail. Canvas redraw keyed to (filteredEvents, zoom, selectedId,
  * scrollTop); re-renders skip when nothing changes.
+ *
+ * Rows are oldest-first, matching the event list, so row 0 is the oldest event
+ * and bars cascade rightward as you read down. New events extend the canvas
+ * downward, so the view re-pins to the bottom when the user is already there.
  *
  * @see design_handoff_argus_inspector/argus/Waterfall.jsx
  */
@@ -142,10 +147,19 @@ export function createWaterfall({ store }: WaterfallProps): HTMLElement {
     const list = events.value;
     const selectedId = store.selectedId.value;
     const z = zoom.value;
+    // Measure before drawing: drawBody resizes the canvas, which changes
+    // scrollHeight and would make the test meaningless. Follow while the newest
+    // row is still visible — the same rule the event list uses — so a view
+    // resting a few px short of the end keeps streaming.
+    const wasAtTail = body.scrollHeight - body.scrollTop - body.clientHeight < ROW_HEIGHT;
     drawHeader(axisCanvas, body, list, z);
     drawBody(canvas, body, list, z, selectedId);
     colLabel.textContent = `Event · ${list.length}`;
     zoomLabel.textContent = `${z.toFixed(2)}×`;
+
+    // Newest rows are appended at the bottom; follow them unless the user has
+    // scrolled away. A genuine selection change still wins — it runs after.
+    if (wasAtTail) body.scrollTop = body.scrollHeight;
 
     if (selectedId && selectedId !== lastScrolledId && !selfTriggered) {
       const i = list.findIndex((e) => e.id === selectedId);
