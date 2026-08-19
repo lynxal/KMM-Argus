@@ -39,7 +39,7 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
   const base = `${scheme}://${host}`;
   const wsUrl = `${wsScheme}://${host}/ws`;
 
-  const connection = signal<ConnectionState>('disconnected');
+  const connection = signal<ConnectionState>('connecting');
   const device = signal<DeviceInfo | null>(null);
   const lastSeenAt = signal<number | null>(null);
   const retryAt = signal<number | null>(null);
@@ -152,6 +152,10 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
 
   async function connect(): Promise<void> {
     shutdown = false;
+    // Neutral until an attempt actually resolves — the handshake below is two
+    // network round trips, and painting 'disconnected' through them reads as a
+    // hard failure. Also re-entered by the banner's "Retry now".
+    connection.value = 'connecting';
     try {
       await fetchDevice();
       await backfill();
@@ -168,7 +172,9 @@ export function createWebsocketSource(opts: WebsocketSourceOptions): EventSource
       ws.close();
       ws = null;
     }
-    listeners.clear();
+    // Listeners are NOT cleared: the store subscribes once at mount (bindSource),
+    // so dropping them here would kill ingest for the rest of the session on the
+    // "Retry now" path (disconnect() then connect()).
     connection.value = 'disconnected';
     retryAt.value = null;
   }

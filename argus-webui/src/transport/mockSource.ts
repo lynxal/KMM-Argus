@@ -24,7 +24,7 @@ export function createMockSource(opts: MockSourceOptions = {}): EventSource {
   const speed = opts.speed ?? 8;
   const simulate = opts.simulate ?? 'off';
 
-  const connection = signal<ConnectionState>('disconnected');
+  const connection = signal<ConnectionState>('connecting');
   const device = signal<DeviceInfo | null>(null);
   const lastSeenAt = signal<number | null>(null);
   const retryAt = signal<number | null>(null);
@@ -93,7 +93,7 @@ export function createMockSource(opts: MockSourceOptions = {}): EventSource {
   function disconnect(): void {
     for (const t of timers) clearTimeout(t);
     timers.length = 0;
-    listeners.clear();
+    // Kept subscribed — see websocketSource.disconnect().
     connection.value = 'disconnected';
     retryAt.value = null;
   }

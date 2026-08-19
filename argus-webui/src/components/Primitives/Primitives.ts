@@ -90,12 +90,12 @@ export function createLogoMark(size = 20): SVGSVGElement {
   return svg;
 }
 
-/** Connection status dot — 8px circle, optional pulse. */
-export function createConnDot(tone: 'ok' | 'reco' | 'off'): HTMLElement {
+/** Connection status dot — 8px circle, optional pulse. `wait` = connecting. */
+export function createConnDot(tone: 'ok' | 'reco' | 'off' | 'wait'): HTMLElement {
   const el = document.createElement('span');
   const color =
     tone === 'ok' ? 'bg-conn-ok-dot' : tone === 'reco' ? 'bg-conn-reco-dot' : 'bg-conn-off-dot';
-  const pulse = tone === 'reco' ? 'ds-conn-dot--pulse' : '';
+  const pulse = tone === 'reco' || tone === 'wait' ? 'ds-conn-dot--pulse' : '';
   el.className = ['ds-conn-dot', color, pulse].filter(Boolean).join(' ');
   return el;
 }

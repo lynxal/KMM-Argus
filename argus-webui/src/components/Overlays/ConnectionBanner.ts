@@ -1,16 +1,19 @@
 import { effect } from '@preact/signals-core';
 import type { EventSource } from '../../transport/eventSource';
-import { createIconEl } from '../Primitives/Primitives';
+import { createConnDot, createIconEl } from '../Primitives/Primitives';
+import { bannerState } from './ConnectionBanner.states';
 
 /**
- * 32px full-width banner, visible when connection !== 'connected'. Tinted
- * amber for reconnecting, red for disconnected (per README).
+ * 32px full-width banner, visible when connection !== 'connected'. Neutral
+ * while connecting, amber for reconnecting, red for disconnected (per README).
+ * Tone and copy come from `bannerState` so they can be tested without a DOM.
  */
 export function createConnectionBanner({ source }: { source: EventSource }): HTMLElement {
   const root = document.createElement('div');
   root.className = 'ds-banner flex items-center gap-2 px-3 border-b border-border-default text-xs font-ui';
 
   const icon = document.createElement('span');
+  icon.className = 'flex items-center';
   const msg = document.createElement('span');
   msg.className = 'flex-1 truncate';
   const meta = document.createElement('span');
@@ -27,31 +30,29 @@ export function createConnectionBanner({ source }: { source: EventSource }): HTM
   root.append(icon, msg, meta, retryBtn);
 
   effect(() => {
-    const c = source.connection.value;
-    if (c === 'connected') {
-      root.classList.add('hidden');
+    const state = bannerState({
+      connection: source.connection.value,
+      lastSeenAt: source.lastSeenAt.value,
+      retryAt: source.retryAt.value,
+      hasDevice: source.device.value !== null,
+      now: Date.now(),
+    });
+
+    // `hidden` is how ui-probe.js detects the connected state — keep the toggle.
+    root.classList.toggle('hidden', state.hidden);
+    if (state.hidden) {
       root.classList.remove('flex');
       return;
     }
-    root.classList.remove('hidden');
-    root.classList.add('flex');
-    icon.innerHTML = '';
-    if (c === 'reconnecting') {
-      root.className =
-        'ds-banner flex items-center gap-2 px-3 border-b border-status-4xx-dot bg-status-4xx-bg text-status-4xx-fg text-xs font-ui';
-      icon.appendChild(createIconEl('refresh', 12));
-      msg.textContent = 'Reconnecting…';
-    } else {
-      root.className =
-        'ds-banner flex items-center gap-2 px-3 border-b border-status-5xx-dot bg-status-5xx-bg text-status-5xx-fg text-xs font-ui';
-      icon.appendChild(createIconEl('wifiOff', 12));
-      msg.textContent = 'Disconnected. Last seen just now.';
-    }
-    const last = source.lastSeenAt.value;
-    const retry = source.retryAt.value;
-    meta.textContent = last
-      ? `last seen ${new Date(last).toLocaleTimeString()}${retry ? ` · retry in ${Math.max(0, Math.round((retry - Date.now()) / 1000))}s` : ''}`
-      : '';
+    root.className = state.className;
+
+    if (state.dot) icon.replaceChildren(createConnDot(state.dot));
+    else if (state.icon) icon.replaceChildren(createIconEl(state.icon, 12));
+    else icon.replaceChildren();
+
+    msg.textContent = state.message;
+    meta.textContent = state.meta;
+    retryBtn.classList.toggle('hidden', !state.showRetry);
   });
 
   return root;
