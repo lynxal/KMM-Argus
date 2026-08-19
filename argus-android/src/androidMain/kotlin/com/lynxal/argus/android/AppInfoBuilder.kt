@@ -3,6 +3,7 @@ package com.lynxal.argus.android
 import android.content.Context
 import android.os.Build
 import com.lynxal.argus.model.AppInfo
+import com.lynxal.argus.model.ArgusBuildKonfig
 
 internal object AppInfoBuilder {
     fun from(context: Context): AppInfo {
@@ -15,7 +16,7 @@ internal object AppInfoBuilder {
             pkg = pkg,
             versionName = versionName,
             device = device,
-            argusVersion = BuildConfig.ARGUS_VERSION,
+            argusVersion = ArgusBuildKonfig.ARGUS_VERSION,
         )
     }
 }

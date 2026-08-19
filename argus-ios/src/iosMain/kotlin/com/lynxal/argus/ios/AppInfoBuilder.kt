@@ -1,6 +1,7 @@
 package com.lynxal.argus.ios
 
 import com.lynxal.argus.model.AppInfo
+import com.lynxal.argus.model.ArgusBuildKonfig
 import platform.Foundation.NSBundle
 import platform.UIKit.UIDevice
 
@@ -14,9 +15,7 @@ internal object AppInfoBuilder {
             pkg = pkg,
             versionName = versionName,
             device = device,
-            argusVersion = ARGUS_VERSION,
+            argusVersion = ArgusBuildKonfig.ARGUS_VERSION,
         )
     }
-
-    private const val ARGUS_VERSION = "0.1.0"
 }

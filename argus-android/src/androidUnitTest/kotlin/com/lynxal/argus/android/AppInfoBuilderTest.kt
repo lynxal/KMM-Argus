@@ -1,5 +1,6 @@
 package com.lynxal.argus.android
 
+import com.lynxal.argus.model.ArgusBuildKonfig
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -19,10 +20,18 @@ class AppInfoBuilderTest {
         assertEquals(context.packageName, info.pkg)
     }
 
+    // assertEquals is a wiring check: it fails if someone reintroduces a literal
+    // instead of reading the generated constant. The semver check is the real
+    // assertion. Agreement with gradle.properties is enforced by
+    // :verifyVersionPins, which a unit test cannot do -- it can't read the property.
     @Test
-    fun `populates argusVersion from BuildConfig`() {
+    fun `populates argusVersion from the generated constant`() {
         val info = AppInfoBuilder.from(context)
-        assertEquals(BuildConfig.ARGUS_VERSION, info.argusVersion)
+        assertEquals(ArgusBuildKonfig.ARGUS_VERSION, info.argusVersion)
+        assertTrue(
+            Regex("""\d+\.\d+\.\d+""").matches(info.argusVersion),
+            "argusVersion is not semver: ${info.argusVersion}",
+        )
     }
 
     @Test
