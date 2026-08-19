@@ -44,8 +44,8 @@ function TopBar({ view, setView, theme, setTheme, conn, paused, onPauseToggle, o
       </div>
 
       <div style={tbs.actions}>
-        {/* Textual CTA, unfiltered — exports every captured event. */}
-        <button onClick={onExport} style={tbs.textBtn} title="Export all events as JSON">Export</button>
+        {/* Textual CTA opening a two-item menu: Export all / Export filtered. */}
+        <button onClick={onExport} style={tbs.textBtn} title="Export events as JSON">Export <span style={{color:'var(--fg-3)'}}>▾</span></button>
         <button onClick={onClear} style={tbs.iconBtn} title="Clear events (x)"><Icon name="trash" size={13} /></button>
         <button onClick={onPauseToggle} style={{ ...tbs.iconBtn, color: paused ? 'var(--amber-600)' : 'var(--fg-2)' }} title={paused ? 'Resume (p)' : 'Pause (p)'}>
           <Icon name={paused ? 'play' : 'pause'} size={13} />

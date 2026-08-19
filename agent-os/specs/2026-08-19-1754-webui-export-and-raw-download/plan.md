@@ -306,3 +306,69 @@ Manual pass in the browser, both themes:
     a fixture) and confirm the UI renders it — this is the round-trip #1 asked for.
 
 Closing evidence: the exported JSON and one downloaded raw payload attached to issues #1 and #2.
+
+
+---
+
+# Review follow-up (same branch, second commit)
+
+Three items raised after the first commit landed.
+
+## 1. Export offers both scopes
+
+The single unfiltered button becomes a menu with **Export all** and **Export filtered**, each labelled
+with its live count and disabled when its set is empty. New `argus-webui/src/components/TopBar/
+ExportMenu.ts`, mirroring `FilterBar/SourceLabelDropdown.ts` — portaled to `document.body`,
+`position: fixed`, repositioned on scroll/resize, dismissed by click-outside and Escape, right-aligned
+to the trigger. "Filtered" exports `store.filteredEvents`, i.e. exactly the visible rows. Toast
+distinguishes the two ("Exported 2 filtered events · …").
+
+## 2. "Copy as cURL" did not work — root cause and fix
+
+Measured, not guessed. `navigator.clipboard` is gated on `isSecureContext`; the device serves the UI
+over plain http on a LAN IP, where the object is `undefined`, so `.writeText` throws **synchronously**
+and the `.catch(() => undefined)` on the promise chain never runs:
+
+| origin | isSecureContext | navigator.clipboard | click result |
+| --- | --- | --- | --- |
+| `http://localhost:5173` (dev) | true | object | copies, but no toast ever fired |
+| `http://172.20.0.51:5173` (real) | false | undefined | `TypeError`, nothing copied, nothing reported |
+
+Fix, as directed: drop the button and render the command as selectable text on the Request tab —
+`select-all` so one click selects all of it, a `CURL` badge, and a "click to select · ⌘C to copy" hint.
+No clipboard API on that path at all.
+
+Two consequences handled in the same change:
+
+- **`⌘C` now yields to a live text selection.** `onKey` called `preventDefault()` unconditionally, so
+  ⌘C over the selected command would have copied the whole event instead of the highlighted text.
+- **`⌘C` itself was broken by the same root cause** and is a documented shortcut, so
+  `argus-webui/src/export/clipboard.ts` adds `copyText()`: try `navigator.clipboard`, else a hidden
+  textarea plus `execCommand('copy')`, which is deprecated but is the only thing that works over http.
+  The toast now reports the real outcome instead of firing unconditionally.
+
+## 3. CI verified every PR twice
+
+`verify.yml` triggered on both `pull_request` and `push: [main]`, so the post-merge run re-verified the
+tree the PR run had already verified. The `push` trigger is dropped; `workflow_dispatch` stays for
+verifying main on demand before a release. Accepted tradeoff: a broken merge to main is no longer
+caught automatically. `publishToMavenCentral.yml`'s comment claimed Verify guarded main, so it is
+corrected too.
+
+## Verification of the follow-up
+
+All of it headless against the dev server bound to a **LAN IP** — the insecure context where the bug
+lived — plus `tsc --noEmit` and the 47 unit tests.
+
+- Export menu: both options visible, `aria-expanded`, live counts, Escape and click-outside dismiss,
+  menu closes on choose.
+- Export all = 17/17 events; Export filtered = 2 events = 2 visible rows of 17, and every exported id
+  is one of the visible rows; Export all still exports 17 while the filter is active; "Export filtered"
+  disabled at 0 matches while "Export all" stays enabled.
+- cURL block: Copy button gone, command rendered with headers, hint shown, one click selects the whole
+  command, ⌘C over that selection produces no app toast (native copy runs), no page errors.
+- ⌘C with nothing selected still toasts "Copied as cURL", and the command **actually reaches the
+  clipboard over http** — proven by poisoning the clipboard with a sentinel, pressing ⌘C, then pasting
+  into the search box and reading the value back.
+- The whole BodyViewer download suite re-run unchanged (truncated, request body, image bytes, no-body,
+  custom payload, round-trip) to confirm the cURL block did not disturb the Request tab.

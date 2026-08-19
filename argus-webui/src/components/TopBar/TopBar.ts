@@ -3,7 +3,7 @@ import type { EventStore, View } from '../../store/eventStore';
 import type { EventSource } from '../../transport/eventSource';
 import type { ShortcutBus } from '../../input/keyboard';
 import { createConnDot, createIconEl, createLogoMark } from '../Primitives/Primitives';
-import { buildEventsExport, downloadFile, eventsFileName } from '../../export/exportFile';
+import { createExportMenu } from './ExportMenu';
 import { styles } from './TopBar.styles';
 import { CONN_TONE, VIEW_LABELS } from './TopBar.states';
 
@@ -114,33 +114,10 @@ export function createTopBar({ store, source, bus }: TopBarProps): HTMLElement {
     store.showCorrelationId.value = !store.showCorrelationId.value;
   });
 
-  // Exports every captured event, ignoring the active filters — the whole point
-  // is to hand the full session to a ticket. `store.events` excludes
-  // `pausedBuffer`, so a paused session exports what is on screen.
-  const exportBtn = document.createElement('button');
-  exportBtn.className = styles.textBtn;
-  exportBtn.type = 'button';
-  exportBtn.textContent = 'Export';
-  exportBtn.title = 'Export all events as JSON';
-  exportBtn.setAttribute('aria-label', 'Export all events as JSON');
-  exportBtn.addEventListener('click', () => {
-    const events = store.events.value;
-    const at = Date.now();
-    if (events.length === 0) {
-      bus.toast.value = { msg: 'No events to export', at };
-      return;
-    }
-    const device = source.device.value;
-    const name = eventsFileName(device, at);
-    try {
-      downloadFile(name, 'application/json', buildEventsExport(events, device, at));
-      bus.toast.value = { msg: `Exported ${events.length} events · ${name}`, at };
-    } catch {
-      bus.toast.value = { msg: 'Export failed', at };
-    }
-  });
+  // Two-option menu: the whole capture, or exactly what the filters leave visible.
+  const exportMenu = createExportMenu({ store, source, bus });
 
-  bar.append(brand, connPill, viewSwitcher, spacer, search, exportBtn, corrIdBtn, pauseBtn, clearBtn, themeBtn, helpBtn);
+  bar.append(brand, connPill, viewSwitcher, spacer, search, exportMenu, corrIdBtn, pauseBtn, clearBtn, themeBtn, helpBtn);
 
   // Signals → DOM bindings
   effect(() => {

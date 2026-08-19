@@ -43,7 +43,7 @@ export function createHttpTabs({ event, active, store, bus }: HttpTabsProps): HT
           bus,
         }),
       );
-      panel.appendChild(copyCurlRow(event));
+      panel.appendChild(curlBlock(event));
       break;
     case 'Response':
       if (event.response) {
@@ -225,18 +225,36 @@ function renderRelatedLogs(event: HttpEvent, store: EventStore): HTMLElement {
   return box;
 }
 
-function copyCurlRow(event: HttpEvent): HTMLElement {
-  const row = document.createElement('div');
-  row.className = 'flex items-center gap-2';
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'px-2 h-6 rounded-sm bg-bg-subtle text-fg-1 text-xs font-ui hover:bg-bg-active cursor-pointer';
-  btn.textContent = 'Copy as cURL';
-  btn.addEventListener('click', () => {
-    void navigator.clipboard.writeText(buildCurl(event)).catch(() => undefined);
-  });
-  row.appendChild(btn);
-  return row;
+/**
+ * The cURL command as selectable text rather than behind a Copy button.
+ *
+ * `navigator.clipboard` only exists in a secure context, and the UI is normally
+ * served by the device over plain http on a LAN address — so the old button's
+ * `navigator.clipboard.writeText` threw on the property access and copied
+ * nothing. Showing the command sidesteps the API entirely: `select-all` means
+ * one click selects the whole command, then ⌘C is the browser's own copy.
+ */
+function curlBlock(event: HttpEvent): HTMLElement {
+  const box = document.createElement('div');
+  box.className = 'flex flex-col gap-2 min-h-0';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'flex items-center gap-2 h-6 text-fg-2 text-xs font-mono';
+  const badge = document.createElement('span');
+  badge.className = 'px-2 h-5 flex items-center rounded-sm bg-bg-subtle text-fg-2';
+  badge.textContent = 'CURL';
+  const hint = document.createElement('span');
+  hint.className = 'text-fg-3';
+  hint.textContent = 'click to select · ⌘C to copy';
+  toolbar.append(badge, hint);
+  box.appendChild(toolbar);
+
+  const pre = document.createElement('pre');
+  pre.className =
+    'select-all cursor-text overflow-auto bg-bg-sunken rounded-md border border-border-subtle p-3 font-mono text-xs text-fg-1 whitespace-pre-wrap break-all';
+  pre.textContent = buildCurl(event);
+  box.appendChild(pre);
+  return box;
 }
 
 function textRow(text: string): HTMLElement {

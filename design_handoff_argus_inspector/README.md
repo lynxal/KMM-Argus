@@ -33,7 +33,7 @@ Top to bottom:
      - `reconnecting` — amber dot, pulsing (`argusPulse` keyframe, 1.2s)
      - `disconnected` — red dot
    - Center: view switcher — segmented control with three options (List / Split / Waterfall). Selected segment: `bg-panel`, subtle shadow, `fg-1`. Unselected: `fg-2`.
-   - Right side (left-to-right): global search (`/` to focus, 240 px wide, monospace placeholder), "Export" button (textual CTA, 24 px, `bg-subtle`; writes every captured event to one JSON file, ignoring the active filters), correlation-id column toggle, pause button (toggles to resume icon when paused), clear button, theme toggle, help button (`?`).
+   - Right side (left-to-right): global search (`/` to focus, 240 px wide, monospace placeholder), "Export ▾" menu (textual CTA, 24 px, `bg-subtle`; opens a two-item menu — "Export all" and "Export filtered", each showing its event count, writing one JSON file), correlation-id column toggle, pause button (toggles to resume icon when paused), clear button, theme toggle, help button (`?`).
 2. **Connection banner** — only visible when `conn !== 'connected'`. 32 px tall, full-width, tinted by state (amber for reconnecting, red for disconnected). Contains icon, message, last-seen timestamp, retry countdown, "Retry now" button.
 3. **FilterBar** — 36 px tall, `bg-panel`, `border-default` bottom.
    - Source toggles: HTTP / LOG / CUSTOM as filled chips. Active = source's tinted background; inactive = `bg-subtle` with muted text.
@@ -65,9 +65,9 @@ Two panels, 50/50 split.
   - Tabs (HTTP): Overview · Headers · Request · Response · Timing · cURL. (LOG): Overview · Context · Stack. (CUSTOM): Overview · Payload.
   - Overview: large title (method + path or event name), status pill, host + timestamp, grid of KV pairs (12 px labels in `fg-3`, 13 px mono values in `fg-1`).
   - Headers: two-column table, 28 px rows, mono, header name in `fg-2`, value in `fg-1`.
-  - Request/Response: BodyViewer (see below).
+  - Request/Response: BodyViewer (see below). The Request tab also renders the cURL block (see below).
   - Timing: horizontal stacked bar — DNS / Connect / TLS / Wait / Download segments with their own tints, ms labels under each.
-  - cURL: syntax-highlighted single-string block, "Copy" button top-right.
+  - cURL: single-string block rendered on the Request tab, in `bg-sunken` with a `CURL` badge and a "click to select · ⌘C to copy" hint. **Selectable text, no Copy button** — `navigator.clipboard` only exists in a secure context and the UI is normally served over plain http on a LAN address, so a Copy button silently copied nothing there. One click selects the whole command (`select-all`); ⌘C is then the browser's own copy. The ⌘C shortcut yields to a live text selection for the same reason.
 
 ### View: Waterfall
 
@@ -112,7 +112,7 @@ Two-column grid of sections (Navigate / Search & filter / Capture / Views / Help
 
 ### Toast
 
-Bottom-center, 32 px tall, `bg-overlay`, `shadow-md`, `border-default`, 6 px radius. Check icon (in `--conn-ok-fg`) + message + undo hint (`⌘ Z`). Auto-dismiss after ~3s. Used for: "Copied as cURL", "Exported 142 events", "Downloaded argus-log-….json", "Filter cleared", etc.
+Bottom-center, 32 px tall, `bg-overlay`, `shadow-md`, `border-default`, 6 px radius. Check icon (in `--conn-ok-fg`) + message + undo hint (`⌘ Z`). Auto-dismiss after ~3s. Used for: "Exported 142 events", "Exported 18 filtered events", "Downloaded argus-log-….json", "Copied as cURL", "Filter cleared", etc.
 
 ### Body viewer variants
 
