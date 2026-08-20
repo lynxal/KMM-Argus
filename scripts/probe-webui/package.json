@@ -1,10 +1,14 @@
 {
   "private": true,
   "name": "argus-probe-webui",
-  "description": "Manual probes that verify the running argus server/UI on http://localhost:8787/. Not wired into CI.",
+  "description": "Probes for the argus Web UI. `probes` runs the three self-contained ones in CI; `ws` and `ui` need a running argus server on http://localhost:8787/ and stay manual.",
   "scripts": {
     "ws": "node ws-probe.js",
-    "ui": "node ui-probe.js"
+    "ui": "node ui-probe.js",
+    "probe:version": "node version-probe.js",
+    "probe:related-logs": "node related-logs-probe.js",
+    "probe:follow-tail": "node follow-tail-probe.js",
+    "probes": "npm run probe:version && npm run probe:related-logs && npm run probe:follow-tail"
   },
   "dependencies": {
     "ws": "^8.18.0"

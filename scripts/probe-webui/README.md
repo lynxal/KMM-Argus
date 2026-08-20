@@ -1,14 +1,30 @@
 # probe-webui
 
-Manual probes against a running argus server (default `http://localhost:8787`). Not part of CI — there is no consumer app in CI to host the server. `follow-tail-probe.js` is the exception: it fakes the device in-process and needs no server, but it is still run by hand for the same reason there is no Node job in `verify.yml` at all.
+Probes for the argus Web UI, in two groups.
+
+**Run in CI** (`.github/workflows/verify-webui.yml`, via `npm run probes`) — `version-probe.js`,
+`related-logs-probe.js`, `follow-tail-probe.js`. All three fake the device in-process through
+`fake-device.js`, so they need no device and no host app, only a built `argus-webui/dist/`.
+
+**Manual only** — `ws-probe.js` and `ui-probe.js`. Both need a real argus server on
+`http://localhost:8787`, which in CI would mean an Android emulator job running the sample app.
+That is a project rather than a task, which is why they were written as manual probes and why
+[#17](https://github.com/lynxal/KMM-Argus/issues/17) left them out of scope.
 
 ## Setup
 
 ```bash
 cd scripts/probe-webui
-npm install
-# Playwright browsers (only needed for ui-probe.js):
+npm ci
+# Playwright browsers (needed by every probe except ws-probe.js):
 npx playwright install chromium
+```
+
+Then, for the three self-contained probes:
+
+```bash
+cd ../../argus-webui && npm ci && npm run build   # they serve dist/
+cd ../scripts/probe-webui && npm run probes       # cheapest first, so a stale dist/ fails in 1s
 ```
 
 ## ws-probe.js — raw WebSocket frame check
@@ -116,7 +132,7 @@ node version-probe.js
 
 Self-contained via `fake-device.js`; needs a built UI but no device.
 
-## fake-device.js — the in-process device both probes share
+## fake-device.js — the in-process device the three CI probes share
 
 Serves the built `argus-webui/dist/` plus `/api/info`, `/api/events`, and `WS /ws` on an ephemeral
 port, and hands back a `push(event)` for emitting over the socket mid-run. Serving the bundle
