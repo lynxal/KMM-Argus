@@ -28,6 +28,9 @@ kotlin {
 
     compilerOptions {
         freeCompilerArgs.add("-opt-in=kotlin.time.ExperimentalTime")
+        // Argus's live-handle registry uses AtomicReference.compareAndSet. Internal only —
+        // it is a private field, so consumers never see it and never opt in themselves.
+        freeCompilerArgs.add("-opt-in=kotlin.concurrent.atomics.ExperimentalAtomicApi")
     }
 }
 

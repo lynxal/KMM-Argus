@@ -19,6 +19,12 @@ public class ArgusHandle internal constructor(
     private val server: ArgusServer,
     private val scope: CoroutineScope,
     private val requestedPort: Int = 0,
+    // Invoked as teardown *begins*, before the engine drains. Argus drops its live
+    // reference here rather than at the end of stop(): the drain is bounded at ~1.1 s
+    // (measured 30-120 ms in practice), and a start() landing in that window must build a
+    // fresh handle instead of being handed this dying one. Receives `this` so Argus only clears the slot if it still owns it -- an
+    // outgoing handle finishing its drain must not null out a newer handle's registration.
+    private val onStopping: (ArgusHandle) -> Unit = {},
 ) {
     /**
      * The event bus the running server is reading from. Wire into your Ktor
@@ -39,6 +45,12 @@ public class ArgusHandle internal constructor(
     @Volatile
     private var stopped: Boolean = false
 
+    /** True once [stop] has begun. A stopped handle is terminal — never reused. */
+    internal val isStopped: Boolean get() = stopped
+
+    /** True when the bind failed. Argus replaces a failed handle rather than handing it back. */
+    internal val hasFailed: Boolean get() = _startupError.value != null
+
     private val _startupError: MutableStateFlow<Throwable?> = MutableStateFlow(null)
 
     /**
@@ -47,7 +59,16 @@ public class ArgusHandle internal constructor(
      */
     public val startupError: StateFlow<Throwable?> = _startupError.asStateFlow()
 
+    // A bind that completes after stop() still lands here: server.start() is
+    // non-suspending once it returns, so scope.cancel() cannot preempt the callback,
+    // and stop() spends ~1.1 s draining the engine before it even gets there. Without
+    // this guard a stopped handle republishes url -- breaking the "null after stop"
+    // contract above, so a debug UI shows a live link to a server being torn down --
+    // and logs "listening on" after teardown. That late line is also what makes the
+    // Kotlin/Native test reporter throw "Received output for test that is not
+    // running": the server outlives the test that started it.
     internal fun onStarted() {
+        if (stopped) return
         val ip = LocalIp.firstIPv4() ?: "0.0.0.0"
         val port = server.boundPort
         val bound = "http://$ip:$port"
@@ -59,6 +80,7 @@ public class ArgusHandle internal constructor(
     }
 
     internal fun onFailed(t: Throwable) {
+        if (stopped) return
         _startupError.value = t
         Log.e(LOG_TAG, "Argus start failed", t)
     }
@@ -79,6 +101,9 @@ public class ArgusHandle internal constructor(
     public fun stop() {
         if (stopped) return
         stopped = true
+        // Before the drain, not after — see onStopping.
+        runCatching { onStopping(this) }
+            .onFailure { Log.w(LOG_TAG, "Argus stop hook failed; ignoring", it) }
         _url.value = null
         _startupError.value = null
         runCatching { server.stop() }
