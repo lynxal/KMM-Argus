@@ -18,10 +18,12 @@
 //
 // Requires a built UI:  cd argus-webui && npm run build
 
+const path = require('path');
 const { chromium } = require('playwright');
 const { startFakeDevice, APP_INFO } = require('./fake-device');
 
 const VIEWPORT = { width: 900, height: 600 };
+const shotPath = path.join(__dirname, 'last-failure.png');
 const SETTLE_MS = 3000;
 
 const t0 = Date.now();
@@ -116,6 +118,13 @@ async function main() {
     } catch (err) {
         failures.push(`probe threw: ${err.message}`);
     } finally {
+        // Same as the other two probes: capture before the browser goes away.
+        // A timeout here reports only "waitForFunction exceeded", which says
+        // nothing about what the page actually rendered — and in CI the page is
+        // the only thing you cannot go back and look at.
+        if (failures.length > 0) {
+            try { await page.screenshot({ path: shotPath, fullPage: true }); } catch {}
+        }
         await browser.close();
         device.close();
     }
@@ -123,6 +132,7 @@ async function main() {
     if (failures.length > 0) {
         console.error('\nFAIL');
         failures.forEach((f) => console.error(`  - ${f}`));
+        console.error(`screenshot: ${shotPath}`);
         process.exit(1);
     }
     log(`PASS — TopBar shows (${APP_INFO.argusVersion}) from the hello frame`);

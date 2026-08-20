@@ -9,7 +9,7 @@
     "build": "npm run tokens && tsc --noEmit && vite build",
     "preview": "vite preview",
     "tokens": "tsx scripts/build-tokens.ts",
-    "lint": "tsx scripts/lint-tokens.ts && tsc --noEmit",
+    "lint": "npm run tokens && tsx scripts/lint-tokens.ts && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "perf": "vite --mode perf",

@@ -1,0 +1,95 @@
+name: Verify (Web UI)
+
+permissions:
+  contents: read
+
+# Paths-filtered so Kotlin-only PRs skip the whole job — nothing under
+# argus-webui/ or scripts/probe-webui/ can change without this running, and
+# nothing else pays for it. The trade that buys: GitHub reports *no status* for
+# a skipped paths-filtered workflow, so "Verify (Web UI)" cannot be made a
+# required check in branch protection without adding a no-op guard job. That is
+# deliberate; it is written down here so it is not rediscovered as a bug.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'argus-webui/**'
+      - 'scripts/probe-webui/**'
+      - '.github/workflows/verify-webui.yml'
+  workflow_dispatch:
+
+jobs:
+  webui:
+    # GitHub-hosted on purpose. The org's self-hosted [self-hosted, android-build]
+    # runner cannot serve this repo: Argus is public, every repo using that runner
+    # is private, and a runner group does not allow public repositories by
+    # default — the box also builds and distributes Canvas's Android releases, so
+    # letting fork PRs execute on it is not a trade worth making. ubuntu-latest
+    # also gives `playwright install --with-deps` the sudo it needs.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          # The repo carries three lockfiles — root doc-tooling, the Web UI, and
+          # the probes. Without an explicit list the npm cache keys off the wrong
+          # one and silently never hits.
+          cache-dependency-path: |
+            argus-webui/package-lock.json
+            scripts/probe-webui/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          # scripts/probe-webui/package-lock.json pins the Playwright version, so
+          # this key moves exactly when the browser build has to be re-downloaded.
+          key: ${{ runner.os }}-playwright-${{ hashFiles('scripts/probe-webui/package-lock.json') }}
+
+      - name: Install Web UI deps
+        working-directory: argus-webui
+        run: npm ci
+
+      - name: Lint + typecheck
+        working-directory: argus-webui
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: argus-webui
+        run: npm test
+
+      - name: Build the Web UI
+        # Also the only step that type-checks the real production build, and it
+        # produces the dist/ that the probes below serve.
+        working-directory: argus-webui
+        run: npm run build
+
+      - name: Install probe deps
+        working-directory: scripts/probe-webui
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: scripts/probe-webui
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser probes
+        # The three self-contained probes (version, related-logs, follow-tail).
+        # ui-probe.js and ws-probe.js are excluded on purpose — they need a real
+        # argus server on :8787. See scripts/probe-webui/README.md.
+        working-directory: scripts/probe-webui
+        run: npm run probes
+
+      - name: Upload probe failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-failure
+          path: scripts/probe-webui/last-failure.png
+          if-no-files-found: ignore
