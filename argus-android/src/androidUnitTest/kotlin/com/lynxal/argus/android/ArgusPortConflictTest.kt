@@ -7,6 +7,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.net.ServerSocket
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -20,6 +21,11 @@ import kotlin.test.assertTrue
  * The uncaught-handler assertion is what actually proves the fix; asserting only on
  * `startupError` would pass even with the crash still present, because the error reaches
  * the handle through a separate path.
+ *
+ * The port is occupied by a plain [ServerSocket], not by a second Argus. Argus now allows
+ * only one live server per process, so a second `start()` returns the running handle rather
+ * than colliding — the only real collision left is with a socket Argus does not own, which
+ * is also what a port clash looks like in production: some other process holds the port.
  */
 @RunWith(RobolectricTestRunner::class)
 class ArgusPortConflictTest {
@@ -29,23 +35,18 @@ class ArgusPortConflictTest {
     @Test
     fun `a pinned port that is already taken reports startupError without an uncaught exception`() =
         withUncaughtExceptionRecorder { uncaught ->
-            runBlocking {
-                val first = Argus.start(context) { port = 0 }
-                try {
-                    val taken = portOf(withTimeout(STARTUP_TIMEOUT_MS) { first.url.first { it != null } }!!)
-
-                    val second = Argus.start(context) { port = taken }
+            withOccupiedPort { taken ->
+                runBlocking {
+                    val blocked = Argus.start(context) { port = taken }
                     try {
                         val error = withTimeout(STARTUP_TIMEOUT_MS) {
-                            second.startupError.first { it != null }
+                            blocked.startupError.first { it != null }
                         }
                         assertNotNull(error, "expected startupError to be set")
-                        assertNull(second.url.value, "url must stay null when the bind failed")
+                        assertNull(blocked.url.value, "url must stay null when the bind failed")
                     } finally {
-                        second.stop()
+                        blocked.stop()
                     }
-                } finally {
-                    first.stop()
                 }
             }
             assertTrue(
@@ -57,25 +58,20 @@ class ArgusPortConflictTest {
     @Test
     fun `portFallback rebinds on an OS-assigned port when the pinned port is taken`() =
         withUncaughtExceptionRecorder { uncaught ->
-            runBlocking {
-                val first = Argus.start(context) { port = 0 }
-                try {
-                    val taken = portOf(withTimeout(STARTUP_TIMEOUT_MS) { first.url.first { it != null } }!!)
-
-                    val second = Argus.start(context) {
+            withOccupiedPort { taken ->
+                runBlocking {
+                    val fallback = Argus.start(context) {
                         port = taken
                         portFallback = true
                     }
                     try {
-                        val url = withTimeout(STARTUP_TIMEOUT_MS) { second.url.first { it != null } }
+                        val url = withTimeout(STARTUP_TIMEOUT_MS) { fallback.url.first { it != null } }
                         assertNotNull(url)
                         assertNotEquals(taken, portOf(url), "fallback must not reuse the taken port")
-                        assertNull(second.startupError.value, "fallback start must not report an error")
+                        assertNull(fallback.startupError.value, "fallback start must not report an error")
                     } finally {
-                        second.stop()
+                        fallback.stop()
                     }
-                } finally {
-                    first.stop()
                 }
             }
             assertTrue(uncaught.isEmpty(), "unexpected uncaught exception: $uncaught")
@@ -87,23 +83,32 @@ class ArgusPortConflictTest {
             // Stop immediately, before the bind can possibly have completed.
             Argus.start(context) { port = 0 }.stop()
 
-            runBlocking {
-                val holder = Argus.start(context) { port = 0 }
-                try {
-                    val taken = portOf(withTimeout(STARTUP_TIMEOUT_MS) { holder.url.first { it != null } }!!)
+            withOccupiedPort { taken ->
+                runBlocking {
                     val blocked = Argus.start(context) { port = taken }
                     withTimeout(STARTUP_TIMEOUT_MS) { blocked.startupError.first { it != null } }
                     blocked.stop()
                     blocked.stop()
-                } finally {
-                    holder.stop()
-                    holder.stop()
                 }
             }
+
+            val healthy = Argus.start(context) { port = 0 }
+            healthy.stop()
+            healthy.stop()
+
             assertTrue(uncaught.isEmpty(), "stop pushed something to the uncaught handler: $uncaught")
         }
 
     private fun portOf(url: String): Int = url.substringAfterLast(':').toInt()
+
+    /**
+     * Holds a real listening socket for the duration of [body] and passes its port. A raw
+     * socket rather than a second Argus: Argus is single-instance per process now, so it can
+     * no longer collide with itself.
+     */
+    private fun withOccupiedPort(body: (Int) -> Unit) {
+        ServerSocket(0).use { socket -> body(socket.localPort) }
+    }
 
     /**
      * Installs a recording default uncaught-exception handler for the duration of [body].

@@ -20,6 +20,12 @@ public class ArgusHandle internal constructor(
     private val server: ArgusServer,
     private val scope: CoroutineScope,
     private val requestedPort: Int = 0,
+    // Invoked as teardown *begins*, before the engine drains. Argus drops its live
+    // reference here rather than at the end of stop(): the drain is bounded at ~1.1 s
+    // (measured 30-120 ms in practice), and a start() landing in that window must build a
+    // fresh handle instead of being handed this dying one. Receives `this` so Argus only clears the slot if it still owns it -- an
+    // outgoing handle finishing its drain must not null out a newer handle's registration.
+    private val onStopping: (ArgusHandle) -> Unit = {},
 ) {
     /**
      * The event bus the running server is reading from. Wire into your Ktor
@@ -39,6 +45,12 @@ public class ArgusHandle internal constructor(
 
     @Volatile
     private var stopped: Boolean = false
+
+    /** True once [stop] has begun. A stopped handle is terminal — never reused. */
+    internal val isStopped: Boolean get() = stopped
+
+    /** True when the bind failed. Argus replaces a failed handle rather than handing it back. */
+    internal val hasFailed: Boolean get() = _startupError.value != null
 
     private val _startupError: MutableStateFlow<Throwable?> = MutableStateFlow(null)
 
@@ -90,6 +102,9 @@ public class ArgusHandle internal constructor(
     public fun stop() {
         if (stopped) return
         stopped = true
+        // Before the drain, not after — see onStopping.
+        runCatching { onStopping(this) }
+            .onFailure { NSLog("[Argus] stop hook failed, ignoring: ${it.message ?: it::class.simpleName}") }
         _url.value = null
         _startupError.value = null
         runCatching { server.stop() }

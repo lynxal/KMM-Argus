@@ -1,5 +1,8 @@
 package com.lynxal.argus.ios
 
+import com.lynxal.argus.model.AppInfo
+import com.lynxal.argus.server.ArgusServer
+import com.lynxal.argus.server.argusConfig
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -20,6 +23,10 @@ import kotlin.test.assertTrue
  * The hook assertion is the real test. Asserting only on `startupError` passes even with the
  * crash still present, because the error reaches the handle by a separate route.
  *
+ * The port is occupied by a bare [ArgusServer], not by a second [Argus.start]. Argus allows
+ * one live server per process now, so the facade can no longer collide with itself — and a
+ * second Argus *process* holding the port is what this actually looks like in the field.
+ *
  * runBlocking, not runTest: the server binds in real time and a virtual scheduler never
  * advances. Test names avoid parentheses — K/N rejects them in backticked names.
  */
@@ -29,20 +36,15 @@ class ArgusPortConflictTest {
     fun `a pinned port that is already taken reports startupError instead of aborting`() {
         withUnhandledExceptionRecorder { unhandled ->
             runBlocking {
-                val first = Argus.start { port = 0 }
-                try {
-                    val taken = portOf(withTimeout(STARTUP_TIMEOUT_MS) { first.url.first { it != null } }!!)
-
-                    val second = Argus.start { port = taken }
+                withOccupiedPort { taken ->
+                    val blocked = Argus.start { port = taken }
                     try {
-                        val error = withTimeout(STARTUP_TIMEOUT_MS) { second.startupError.first { it != null } }
+                        val error = withTimeout(STARTUP_TIMEOUT_MS) { blocked.startupError.first { it != null } }
                         assertNotNull(error, "expected startupError to be set")
-                        assertNull(second.url.value, "url must stay null when the bind failed")
+                        assertNull(blocked.url.value, "url must stay null when the bind failed")
                     } finally {
-                        second.stop()
+                        blocked.stop()
                     }
-                } finally {
-                    first.stop()
                 }
             }
             assertTrue(
@@ -56,24 +58,19 @@ class ArgusPortConflictTest {
     fun `portFallback rebinds on an OS-assigned port when the pinned port is taken`() {
         withUnhandledExceptionRecorder { unhandled ->
             runBlocking {
-                val first = Argus.start { port = 0 }
-                try {
-                    val taken = portOf(withTimeout(STARTUP_TIMEOUT_MS) { first.url.first { it != null } }!!)
-
-                    val second = Argus.start {
+                withOccupiedPort { taken ->
+                    val fallback = Argus.start {
                         port = taken
                         portFallback = true
                     }
                     try {
-                        val url = withTimeout(STARTUP_TIMEOUT_MS) { second.url.first { it != null } }
+                        val url = withTimeout(STARTUP_TIMEOUT_MS) { fallback.url.first { it != null } }
                         assertNotNull(url)
                         assertNotEquals(taken, portOf(url), "fallback must not reuse the taken port")
-                        assertNull(second.startupError.value, "fallback start must not report an error")
+                        assertNull(fallback.startupError.value, "fallback start must not report an error")
                     } finally {
-                        second.stop()
+                        fallback.stop()
                     }
-                } finally {
-                    first.stop()
                 }
             }
             assertTrue(unhandled.isEmpty(), "unexpected unhandled exception: $unhandled")
@@ -87,23 +84,38 @@ class ArgusPortConflictTest {
             Argus.start { port = 0 }.stop()
 
             runBlocking {
-                val holder = Argus.start { port = 0 }
-                try {
-                    val taken = portOf(withTimeout(STARTUP_TIMEOUT_MS) { holder.url.first { it != null } }!!)
+                withOccupiedPort { taken ->
                     val blocked = Argus.start { port = taken }
                     withTimeout(STARTUP_TIMEOUT_MS) { blocked.startupError.first { it != null } }
                     blocked.stop()
                     blocked.stop()
-                } finally {
-                    holder.stop()
-                    holder.stop()
                 }
             }
+
+            val healthy = Argus.start { port = 0 }
+            healthy.stop()
+            healthy.stop()
+
             assertTrue(unhandled.isEmpty(), "stop pushed something to the unhandled hook: $unhandled")
         }
     }
 
     private fun portOf(url: String): Int = url.substringAfterLast(':').toInt()
+
+    /**
+     * Holds a real Argus listener on an OS-assigned port for the duration of [body], built
+     * directly rather than through [Argus.start] so the single-live-server rule does not
+     * short-circuit it.
+     */
+    private suspend fun withOccupiedPort(body: suspend (Int) -> Unit) {
+        val blocker = ArgusServer(argusConfig(BLOCKER_APP_INFO) { port = 0 })
+        blocker.start()
+        try {
+            body(blocker.boundPort)
+        } finally {
+            runCatching { blocker.stop() }
+        }
+    }
 
     /**
      * Installs a recording unhandled-exception hook for the duration of [body] and puts the
@@ -123,5 +135,11 @@ class ArgusPortConflictTest {
 
     private companion object {
         const val STARTUP_TIMEOUT_MS = 5_000L
+        val BLOCKER_APP_INFO = AppInfo(
+            pkg = "com.lynxal.argus.test.blocker",
+            versionName = "0",
+            device = "test",
+            argusVersion = "0",
+        )
     }
 }
