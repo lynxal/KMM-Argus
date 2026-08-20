@@ -863,3 +863,5 @@ If anything appears, you have an `implementation`, `api`, or `releaseImplementat
 Issues and pull requests are welcome via GitHub. There is no `CONTRIBUTING.md` yet — the short version: fork, branch, run `./gradlew check :sample:verifyReleaseHasNoArgus`, open a PR.
 
 License: [MIT](LICENSE) — matching the `licenses` block every module's POM publishes to Maven Central.
+
+<!-- paths-filter negative check: temporary, do not merge -->
