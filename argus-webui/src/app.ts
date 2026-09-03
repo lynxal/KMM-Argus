@@ -45,7 +45,18 @@ export function mountApp(root: HTMLElement): void {
 
   root.innerHTML = '';
   const shell = document.createElement('div');
-  shell.className = 'min-h-screen flex flex-col bg-bg-app text-fg-1 font-ui';
+  // `h-dvh`, not `min-h-screen`. The app is one full-screen layout whose inner boxes
+  // scroll — the event list, and the detail pane's body viewer, both `overflow-auto`
+  // over a `flex-1 min-h-0` chain. `min-height` let the shell grow past the window
+  // instead, and a box with unlimited room never overflows, so those scrollbars
+  // never appeared: a long JSON response stretched the detail pane to ~5x the window
+  // height and the whole document scrolled, carrying the top bar and filter bar off
+  // screen. A definite height is what makes `min-h-0` bite.
+  //
+  // `dvh` over `vh` because a mobile browser's collapsing toolbar makes `100vh`
+  // taller than what you can actually see, which would clip the bottom of the layout
+  // — the problem `min-h-screen` was presumably reaching for in the first place.
+  shell.className = 'h-dvh flex flex-col bg-bg-app text-fg-1 font-ui';
 
   const topBar = createTopBar({ store, source, bus });
   const connectionBanner = createConnectionBanner({ source });

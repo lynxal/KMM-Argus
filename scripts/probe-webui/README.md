@@ -152,13 +152,16 @@ Asserts, against one HTTP event with a deeply nested JSON body:
 
 - the tree arrives with deep nodes collapsed, and a key containing `/` gets its own path;
 - an expanded node is still open after three unrelated logs arrive, and **no** node changed state;
-- the pane was not rebuilt at all — checked by DOM element identity, since a rebuild that restored
-  expansion would be indistinguishable by open state alone, and it is the only assertion that speaks
-  for the scroll offset and text selection that no amount of restoration could bring back;
+- the pane was not rebuilt at all — by DOM element identity *and* by the body box's scroll offset,
+  since a rebuild that restored expansion would be indistinguishable by open state alone, and the
+  offset is the reader's place in a long body, which no amount of state restoration brings back;
 - a deliberately *collapsed* default-open node does not spring back open;
 - expansion survives a tab switch away and back, and reselecting the row;
 - the Request and Response panes of one event keep separate state, on a fixture whose two bodies
-  share their top-level shape so a single shared key would leak one into the other.
+  share their top-level shape so a single shared key would leak one into the other;
+- and the layout invariant those scroll assertions rest on: the document itself does not scroll, a
+  body too tall for the pane scrolls *inside* it, and the box takes an offset at all. Asserted
+  rather than assumed — without it the offset checks would pass vacuously on `0 === 0`.
 
 ```bash
 npm run probe:json-expand
@@ -171,10 +174,13 @@ been expanded. Addresses the tree through `[data-json-node]`, whose value is the
 than by Tailwind class. A missing tab strip is reported as a stale `dist/` rather than counted as a
 failed assertion.
 
-Note it does **not** assert on the pane's scroll offset, which would be the obvious way to show a
-rebuild: no box in the detail pane is height-bounded, so a long body grows the page instead of
-scrolling, and `scrollTop` stays 0 whatever you set it to. Unrelated, unfixed — measure
-`clientHeight` against `scrollHeight` before writing an assertion that assumes otherwise.
+That last group exists because it was briefly untrue. The app shell was `min-h-screen` — a
+*minimum*, so it grew past the window rather than holding to it, and the `flex-1 min-h-0` chain
+below inherited that freedom. No inner box ever ran out of room, so none overflowed: this same
+fixture stretched the detail pane to ~5x the window height and scrolled the whole document,
+carrying the top bar and filter bar off screen, while `scrollTop` stayed 0 whatever you set it to.
+The shell is `h-dvh` now. If a scroll assertion here ever starts reading 0, check that before
+suspecting the probe.
 
 ## fake-device.js — the in-process device the four CI probes share
 

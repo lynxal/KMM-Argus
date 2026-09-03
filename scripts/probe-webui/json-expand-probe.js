@@ -10,11 +10,18 @@
 // the JSON tree was unusable unless you hit Pause first.
 //
 // Three things are asserted separately because three things were wrong: that a
-// push no longer rebuilds the pane at all — checked by DOM element identity, not
-// by open state, since a restored rebuild would look identical either way — that
-// expansion is remembered per pane so it also survives the rebuilds that DO still
-// happen (tab switch, reselect), and that a deliberate COLLAPSE is remembered too
-// rather than springing back to the default.
+// push no longer rebuilds the pane at all — checked by DOM element identity AND by
+// the body box's scroll offset, since a rebuild that restored expansion would look
+// identical by open state alone — that expansion is remembered per pane so it also
+// survives the rebuilds that DO still happen (tab switch, reselect), and that a
+// deliberate COLLAPSE is remembered too rather than springing back to the default.
+//
+// It also holds the layout invariant those scroll assertions depend on: the app is
+// one screen whose inner boxes scroll. The shell was `min-h-screen`, so it grew past
+// the window instead and no inner box ever overflowed — this same fixture stretched
+// the detail pane to ~5x the window height and scrolled the whole document, top bar
+// and all. `scrollTop` stayed 0 whatever you set it to, which is why these
+// assertions could not be written until the shell became `h-dvh`.
 //
 // Self-contained via fake-device.js: the mock source schedules its whole fixture
 // up front inside connect() and has no push API, so it cannot make an event
@@ -32,6 +39,7 @@ const { startFakeDevice } = require('./fake-device');
 const SETTLE_MS = 250;
 const VIEWPORT = { width: 1400, height: 800 };
 const DIAGNOSE = process.argv.includes('--diagnose');
+const SCROLL_TO = 300;
 
 const t0 = Date.now();
 const ts = () => ((Date.now() - t0) / 1000).toFixed(3) + 's';
@@ -146,6 +154,26 @@ function pageRowCount() {
     return document.querySelectorAll('[data-event-id]').length;
 }
 
+/**
+ * The layout facts, in one round trip. Self-contained because `page.evaluate`
+ * serializes this function alone — it cannot call a helper defined out here.
+ *
+ * The box that is supposed to scroll is BodyViewer's own, not the document.
+ */
+function pageLayout() {
+    const strip = document.querySelector('[data-detail-tabs]');
+    const box = strip
+        ? [...strip.parentElement.querySelectorAll('.overflow-auto')].find((el) =>
+              String(el.className).includes('bg-bg-sunken'),
+          ) ?? null
+        : null;
+    return {
+        documentScrolls: document.documentElement.scrollHeight > window.innerHeight + 1,
+        bodyScrolls: box ? box.scrollHeight > box.clientHeight + 1 : null,
+        bodyScrollTop: box ? box.scrollTop : null,
+    };
+}
+
 // --- assertions ------------------------------------------------------------
 
 const failures = [];
@@ -215,6 +243,15 @@ const openState = (nodes, p) => {
         await page.waitForTimeout(SETTLE_MS);
     };
 
+    const scrollBody = (to) =>
+        page.evaluate((px) => {
+            const strip = document.querySelector('[data-detail-tabs]');
+            const box = [...strip.parentElement.querySelectorAll('.overflow-auto')].find((el) =>
+                String(el.className).includes('bg-bg-sunken'),
+            );
+            box.scrollTop = px;
+        }, to);
+
     const openTab = async (name) => {
         await page.click(`button:text-is("${name}")`);
         await page.waitForTimeout(SETTLE_MS);
@@ -271,6 +308,29 @@ const openState = (nodes, p) => {
         log(`expanded ${JSON.stringify(opened)}`);
         await page.waitForTimeout(SETTLE_MS);
 
+        // The layout invariant the scroll assertions below rest on. Asserted here
+        // rather than assumed: without it they pass vacuously on 0 === 0.
+        let layout = await page.evaluate(pageLayout);
+        check(
+            'the app is one screen — the document itself does not scroll',
+            layout.documentScrolls === false,
+            JSON.stringify(layout),
+        );
+        check(
+            'a body too tall for the pane scrolls inside it',
+            layout.bodyScrolls === true,
+            JSON.stringify(layout),
+        );
+
+        await scrollBody(SCROLL_TO);
+        await page.waitForTimeout(SETTLE_MS);
+        layout = await page.evaluate(pageLayout);
+        check(
+            'the body box takes a scroll offset',
+            layout.bodyScrollTop === SCROLL_TO,
+            `set ${SCROLL_TO}, read ${layout.bodyScrollTop}`,
+        );
+
         const beforeNodes = await page.evaluate(pageNodes);
         // Held across the pushes on purpose. Restoring expansion would make a
         // rebuilt tree indistinguishable from an untouched one by open state alone,
@@ -279,12 +339,13 @@ const openState = (nodes, p) => {
         // text selection and the pane's scroll position survive, neither of which
         // any amount of state restoration could bring back.
         const node = await page.$(`[data-json-node="${opened}"]`);
-        if (DIAGNOSE) log('before:', JSON.stringify(beforeNodes));
+        if (DIAGNOSE) log('before:', JSON.stringify(beforeNodes), JSON.stringify(layout));
 
         await pushEvents(3, 0);
 
         const afterNodes = await page.evaluate(pageNodes);
-        if (DIAGNOSE) log('after: ', JSON.stringify(afterNodes));
+        const afterLayout = await page.evaluate(pageLayout);
+        if (DIAGNOSE) log('after: ', JSON.stringify(afterNodes), JSON.stringify(afterLayout));
 
         check(
             'the expanded node is still open after three events arrive',
@@ -300,6 +361,11 @@ const openState = (nodes, p) => {
             'the pane was not rebuilt — the same DOM node is still mounted',
             await node.evaluate((el) => el.isConnected),
             'the element the reader expanded was replaced',
+        );
+        check(
+            'the reader keeps their place — the body scroll offset held',
+            afterLayout.bodyScrollTop === SCROLL_TO,
+            `${SCROLL_TO} → ${afterLayout.bodyScrollTop}`,
         );
 
         // --- 2. a deliberate COLLAPSE survives too -------------------------
