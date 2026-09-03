@@ -3,8 +3,9 @@
 Probes for the argus Web UI, in two groups.
 
 **Run in CI** (`.github/workflows/verify-webui.yml`, via `npm run probes`) — `version-probe.js`,
-`related-logs-probe.js`, `follow-tail-probe.js`. All three fake the device in-process through
-`fake-device.js`, so they need no device and no host app, only a built `argus-webui/dist/`.
+`related-logs-probe.js`, `follow-tail-probe.js`, `json-expand-probe.js`. All four fake the device
+in-process through `fake-device.js`, so they need no device and no host app, only a built
+`argus-webui/dist/`.
 
 **Manual only** — `ws-probe.js` and `ui-probe.js`. Both need a real argus server on
 `http://localhost:8787`, which in CI would mean an Android emulator job running the sample app.
@@ -20,7 +21,7 @@ npm ci
 npx playwright install chromium
 ```
 
-Then, for the three self-contained probes:
+Then, for the four self-contained probes:
 
 ```bash
 cd ../../argus-webui && npm ci && npm run build   # they serve dist/
@@ -132,7 +133,50 @@ node version-probe.js
 
 Self-contained via `fake-device.js`; needs a built UI but no device.
 
-## fake-device.js — the in-process device the three CI probes share
+## json-expand-probe.js — expanded JSON nodes survive the stream
+
+Cover for [#28](https://github.com/lynxal/KMM-Argus/issues/28). The detail pane used to subscribe to the whole `store.events` array, so every ingested event — a log
+from elsewhere in the app, nothing to do with the call being inspected — re-ran its effect and
+rebuilt the tab body via `content.innerHTML = ''`. Expansion lived only in the `<details>` elements
+that wipe destroyed, so every JSON node the reader had opened snapped back to the `depth < 2`
+default, along with the pane's scroll offset and any text selection. On a live stream the tree was
+unusable unless you hit Pause first.
+
+Fixed in two places, and the probe covers them separately because either alone leaves the bug
+half-present: `store.selectedEvent` is a `computed`, so the pane's effect runs on selection changes
+rather than per ingest; and `BodyViewer.states.ts` remembers expansion per pane and path, so the
+rebuilds that legitimately still happen — a tab switch, a reselect — also come back as they were
+left.
+
+Asserts, against one HTTP event with a deeply nested JSON body:
+
+- the tree arrives with deep nodes collapsed, and a key containing `/` gets its own path;
+- an expanded node is still open after three unrelated logs arrive, and **no** node changed state;
+- the pane was not rebuilt at all — checked by DOM element identity, since a rebuild that restored
+  expansion would be indistinguishable by open state alone, and it is the only assertion that speaks
+  for the scroll offset and text selection that no amount of restoration could bring back;
+- a deliberately *collapsed* default-open node does not spring back open;
+- expansion survives a tab switch away and back, and reselecting the row;
+- the Request and Response panes of one event keep separate state, on a fixture whose two bodies
+  share their top-level shape so a single shared key would leak one into the other.
+
+```bash
+npm run probe:json-expand
+node json-expand-probe.js --diagnose   # + the per-node open-state dump before and after
+```
+
+Self-contained via `fake-device.js` — necessarily so: the mock source schedules its whole fixture up
+front inside `connect()` and has no push API, so it cannot make an event arrive *after* a node has
+been expanded. Addresses the tree through `[data-json-node]`, whose value is the node's path, rather
+than by Tailwind class. A missing tab strip is reported as a stale `dist/` rather than counted as a
+failed assertion.
+
+Note it does **not** assert on the pane's scroll offset, which would be the obvious way to show a
+rebuild: no box in the detail pane is height-bounded, so a long body grows the page instead of
+scrolling, and `scrollTop` stays 0 whatever you set it to. Unrelated, unfixed — measure
+`clientHeight` against `scrollHeight` before writing an assertion that assumes otherwise.
+
+## fake-device.js — the in-process device the four CI probes share
 
 Serves the built `argus-webui/dist/` plus `/api/info`, `/api/events`, and `WS /ws` on an ephemeral
 port, and hands back a `push(event)` for emitting over the socket mid-run. Serving the bundle

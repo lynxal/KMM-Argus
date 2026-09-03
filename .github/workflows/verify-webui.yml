@@ -80,7 +80,8 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Browser probes
-        # The three self-contained probes (version, related-logs, follow-tail).
+        # The four self-contained probes (version, related-logs, follow-tail,
+        # json-expand).
         # ui-probe.js and ws-probe.js are excluded on purpose — they need a real
         # argus server on :8787. See scripts/probe-webui/README.md.
         working-directory: scripts/probe-webui
