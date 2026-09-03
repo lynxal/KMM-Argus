@@ -37,8 +37,7 @@ export function createEventDetail({ store, bus }: EventDetailProps): HTMLElement
   wrapper.appendChild(content);
 
   effect(() => {
-    const id = store.selectedId.value;
-    const evt = id ? store.events.value.find((e) => e.id === id) ?? null : null;
+    const evt = store.selectedEvent.value;
     if (!evt) {
       header.innerHTML = '';
       header.append(createEmptyHeader());
@@ -78,9 +77,7 @@ export function createEventDetail({ store, bus }: EventDetailProps): HTMLElement
   // Tab cycling via [ / ] shortcuts. Rotates the active tab for the kind of
   // the currently selected event; no-op when nothing is selected.
   function cycleTab(direction: -1 | 1): void {
-    const id = store.selectedId.peek();
-    if (!id) return;
-    const evt = store.events.peek().find((e) => e.id === id);
+    const evt = store.selectedEvent.peek();
     if (!evt) return;
     const kind = evt.source;
     const tabs: readonly string[] =

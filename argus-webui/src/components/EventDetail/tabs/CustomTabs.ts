@@ -30,6 +30,7 @@ export function createCustomTabs({ event, active, bus }: CustomTabsProps): HTMLE
           mode: 'auto',
           body: event.payload,
           downloadName: `argus-custom-${event.id}-payload`,
+          expandKey: `custom-${event.id}-payload`,
           bus,
         }),
       );
@@ -63,6 +64,7 @@ export function createCustomTabs({ event, active, bus }: CustomTabsProps): HTMLE
           body: JSON.stringify(event, null, 2),
           contentType: 'application/json',
           downloadName: `argus-custom-${event.id}-raw`,
+          expandKey: `custom-${event.id}-raw`,
           bus,
         }),
       );

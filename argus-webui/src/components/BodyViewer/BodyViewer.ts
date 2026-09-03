@@ -8,6 +8,12 @@
 import type { ShortcutBus } from '../../input/keyboard';
 import { bodyDownloadPayload, bodyFileName, downloadFile } from '../../export/exportFile';
 import { styles as topBarStyles } from '../TopBar/TopBar.styles';
+import {
+  isNodeOpen,
+  jsonChildPath,
+  JSON_ROOT_PATH,
+  setNodeOpen,
+} from './BodyViewer.states';
 
 export type BodyMode = 'auto' | 'json' | 'text' | 'image' | 'hex' | 'empty';
 
@@ -21,6 +27,13 @@ export interface BodyViewerProps {
   readonly downloadName?: string | undefined;
   /** Supplies the download's toast. Omit and the download happens silently. */
   readonly bus?: ShortcutBus | undefined;
+  /**
+   * Identity for this pane's JSON expansion state, so a rebuilt tree comes back the
+   * way the reader left it. Must be unique per pane — two panes of one event have
+   * overlapping paths that mean different things. Omit and expansion is not
+   * remembered, which is the old behaviour.
+   */
+  readonly expandKey?: string | undefined;
 }
 
 export function createBodyViewer(p: BodyViewerProps): HTMLElement {
@@ -64,7 +77,7 @@ export function createBodyViewer(p: BodyViewerProps): HTMLElement {
   body.className = 'flex-1 min-h-0 overflow-auto bg-bg-sunken rounded-md border border-border-subtle p-3 font-mono text-sm';
   root.appendChild(body);
 
-  if (mode === 'json') body.appendChild(renderJson(p.body));
+  if (mode === 'json') body.appendChild(renderJson(p.body, p.expandKey));
   else if (mode === 'image') body.appendChild(renderImage(p.body, p.contentType ?? ''));
   else if (mode === 'hex') body.appendChild(renderHex(p.body));
   else body.appendChild(renderText(p.body));
@@ -173,7 +186,7 @@ function renderHex(body: string): HTMLElement {
   return pre;
 }
 
-function renderJson(body: string): HTMLElement {
+function renderJson(body: string, key: string | undefined): HTMLElement {
   const root = document.createElement('div');
   root.className = 'text-fg-1';
   let parsed: unknown;
@@ -185,17 +198,23 @@ function renderJson(body: string): HTMLElement {
     pre.textContent = body;
     return pre;
   }
-  root.appendChild(renderJsonValue(parsed, 0));
+  root.appendChild(renderJsonValue(parsed, 0, JSON_ROOT_PATH, key));
   return root;
 }
 
-function renderJsonValue(value: unknown, depth: number): HTMLElement {
+function renderJsonValue(
+  value: unknown,
+  depth: number,
+  path: string,
+  key: string | undefined,
+): HTMLElement {
   if (value === null) return jsonLeaf('null', 'text-syn-null');
   if (typeof value === 'boolean') return jsonLeaf(String(value), 'text-syn-bool');
   if (typeof value === 'number') return jsonLeaf(String(value), 'text-syn-number');
   if (typeof value === 'string') return jsonLeaf(JSON.stringify(value), 'text-syn-string');
-  if (Array.isArray(value)) return renderJsonArray(value, depth);
-  if (typeof value === 'object') return renderJsonObject(value as Record<string, unknown>, depth);
+  if (Array.isArray(value)) return renderJsonArray(value, depth, path, key);
+  if (typeof value === 'object')
+    return renderJsonObject(value as Record<string, unknown>, depth, path, key);
   return jsonLeaf(String(value), 'text-fg-1');
 }
 
@@ -206,37 +225,37 @@ function jsonLeaf(text: string, color: string): HTMLElement {
   return span;
 }
 
-function renderJsonObject(obj: Record<string, unknown>, depth: number): HTMLElement {
+function renderJsonObject(
+  obj: Record<string, unknown>,
+  depth: number,
+  path: string,
+  key: string | undefined,
+): HTMLElement {
   const keys = Object.keys(obj);
   if (keys.length === 0) return jsonLeaf('{}', 'text-syn-punct');
-  const details = document.createElement('details');
-  details.open = depth < 2;
-  const summary = document.createElement('summary');
-  summary.className = 'cursor-pointer text-syn-punct';
-  summary.textContent = `{${keys.length} keys}`;
-  details.appendChild(summary);
+  const details = collapsible(`{${keys.length} keys}`, depth, path, key);
   const ul = document.createElement('ul');
   ul.className = 'ml-4 border-l border-border-subtle pl-2';
   for (const k of keys) {
     const li = document.createElement('li');
-    const key = document.createElement('span');
-    key.className = 'text-syn-key font-semibold';
-    key.textContent = `${JSON.stringify(k)}: `;
-    li.append(key, renderJsonValue(obj[k], depth + 1));
+    const label = document.createElement('span');
+    label.className = 'text-syn-key font-semibold';
+    label.textContent = `${JSON.stringify(k)}: `;
+    li.append(label, renderJsonValue(obj[k], depth + 1, jsonChildPath(path, k), key));
     ul.appendChild(li);
   }
   details.appendChild(ul);
   return details;
 }
 
-function renderJsonArray(arr: unknown[], depth: number): HTMLElement {
+function renderJsonArray(
+  arr: unknown[],
+  depth: number,
+  path: string,
+  key: string | undefined,
+): HTMLElement {
   if (arr.length === 0) return jsonLeaf('[]', 'text-syn-punct');
-  const details = document.createElement('details');
-  details.open = depth < 2;
-  const summary = document.createElement('summary');
-  summary.className = 'cursor-pointer text-syn-punct';
-  summary.textContent = `[${arr.length} items]`;
-  details.appendChild(summary);
+  const details = collapsible(`[${arr.length} items]`, depth, path, key);
   const ul = document.createElement('ul');
   ul.className = 'ml-4 border-l border-border-subtle pl-2';
   for (let i = 0; i < arr.length; i++) {
@@ -244,9 +263,41 @@ function renderJsonArray(arr: unknown[], depth: number): HTMLElement {
     const idx = document.createElement('span');
     idx.className = 'text-fg-3 text-xs mr-2';
     idx.textContent = String(i);
-    li.append(idx, renderJsonValue(arr[i], depth + 1));
+    li.append(idx, renderJsonValue(arr[i], depth + 1, jsonChildPath(path, String(i)), key));
     ul.appendChild(li);
   }
   details.appendChild(ul);
+  return details;
+}
+
+/**
+ * The `<details>` shell every branch node shares.
+ *
+ * `data-json-node` carries the node's path — the structural hook the browser
+ * probes address the tree through, the same role `data-detail-tabs` plays on the
+ * tab strip. Classes here are styling and change freely; this does not.
+ *
+ * The `toggle` listener is what makes an expansion outlive the element: the pane
+ * is rebuilt from scratch on a tab switch and on a reselect, so a node's own
+ * `open` flag cannot be the record of what the reader opened. It fires for the
+ * `open` assignment above as well as for a click, which is why `setNodeOpen` is
+ * told the depth and drops writes that only restate the default.
+ */
+function collapsible(
+  label: string,
+  depth: number,
+  path: string,
+  key: string | undefined,
+): HTMLDetailsElement {
+  const details = document.createElement('details');
+  details.dataset['jsonNode'] = path;
+  details.open = isNodeOpen(key, path, depth);
+  if (key != null) {
+    details.addEventListener('toggle', () => setNodeOpen(key, path, details.open, depth));
+  }
+  const summary = document.createElement('summary');
+  summary.className = 'cursor-pointer text-syn-punct';
+  summary.textContent = label;
+  details.appendChild(summary);
   return details;
 }
