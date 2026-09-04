@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { effect } from '@preact/signals-core';
 import { createEventStore } from '../eventStore';
 import type { ArgusEvent } from '../../transport/schema';
 
@@ -250,5 +251,89 @@ describe('redirect chains', () => {
 
     expect(store.redirectOrigins.value.size).toBe(0);
     expect(store.linkedIds.value.size).toBe(0);
+  });
+});
+
+/**
+ * The invariant the detail pane depends on: reading the selection through the
+ * computed must not make a reader re-run on every ingested event. Doing the
+ * `events.find(...)` inline instead is what rebuilt the pane per event and
+ * collapsed the reader's expanded JSON nodes under them.
+ */
+describe('selectedEvent', () => {
+  it('resolves the selection, and null for nothing / unknown / evicted', () => {
+    const store = createEventStore({ maxEvents: 2 });
+    store.ingest(log(1));
+    store.ingest(log(2));
+
+    expect(store.selectedEvent.value).toBeNull();
+
+    store.selectedId.value = 'e1';
+    expect(store.selectedEvent.value?.id).toBe('e1');
+
+    store.selectedId.value = 'nope';
+    expect(store.selectedEvent.value).toBeNull();
+
+    store.selectedId.value = 'e1';
+    store.ingest(log(3)); // caps at 2, so e1 falls off the front
+    expect(store.selectedEvent.value).toBeNull();
+  });
+
+  it('does not notify when an unrelated event arrives', () => {
+    const store = createEventStore();
+    store.ingest(log(1));
+    store.selectedId.value = 'e1';
+
+    let runs = 0;
+    effect(() => {
+      store.selectedEvent.value;
+      runs++;
+    });
+    expect(runs).toBe(1);
+
+    store.ingest(log(2));
+    store.ingest(log(3));
+    store.ingest(log(4));
+    expect(runs).toBe(1);
+  });
+
+  it('notifies when the selection changes', () => {
+    const store = createEventStore();
+    store.ingest(log(1));
+    store.ingest(log(2));
+    store.selectedId.value = 'e1';
+
+    let runs = 0;
+    effect(() => {
+      store.selectedEvent.value;
+      runs++;
+    });
+
+    store.selectedId.value = 'e2';
+    expect(runs).toBe(2);
+
+    store.selectedId.value = null;
+    expect(runs).toBe(3);
+  });
+
+  it('notifies when the selected event is replaced in place', () => {
+    // The old-library path: a redirect's 302 and its 200 arrive under one id, and
+    // the later hop replaces the earlier. The pane SHOULD refresh for that.
+    const store = createEventStore();
+    store.ingest(http('hop', 302, 5));
+    store.selectedId.value = 'hop';
+
+    const seen: (number | undefined)[] = [];
+    effect(() => {
+      const evt = store.selectedEvent.value;
+      seen.push(
+        evt && 'response' in evt
+          ? (evt as { response: { statusCode: number } }).response.statusCode
+          : undefined,
+      );
+    });
+
+    store.ingest(http('hop', 200, 9));
+    expect(seen).toEqual([302, 200]);
   });
 });

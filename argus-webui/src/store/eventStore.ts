@@ -37,6 +37,12 @@ export interface EventStore {
    * sharing its correlationId — excluding the selection itself.
    */
   readonly linkedIds: Signal<ReadonlySet<string>>;
+  /**
+   * The selected event, or null when nothing is selected or the selection has been
+   * evicted. Read this rather than searching `events` yourself — see the note at
+   * its definition for why that matters to anything rendering inside an `effect`.
+   */
+  readonly selectedEvent: Signal<ArgusEvent | null>;
 
   readonly paused: Signal<boolean>;
   readonly view: Signal<View>;
@@ -108,6 +114,25 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   // eviction, clearLocal and undoClear all stay correct with no extra bookkeeping.
   const redirectOrigins = computed(() => buildRedirectOrigins(events.value));
   const linkedIds = computed(() => linkedEventIds(events.value, selectedId.value));
+
+  // A `computed`, never a bare `events.value.find(...)` at the call site: a computed
+  // only bumps its version when its VALUE changes, and appending an event leaves the
+  // selected one the same object. An effect reading this therefore runs on selection
+  // changes, not on every ingest.
+  //
+  // EventDetail's did the search inline and so depended on the array, which is
+  // reassigned per event (see `ingest`). It re-ran per event and rebuilt the whole
+  // tab body with `content.innerHTML = ''` — throwing away every JSON node the
+  // reader had expanded, the pane's scroll offset, and any text selection, on a
+  // stream that never stops (#28). Same trap, and same fix, as the content-host
+  // swap in app.ts. Do not inline this back into a caller.
+  //
+  // `replace()` swapping in a later copy of the selected event DOES yield a new
+  // object, so a 302 becoming its 200 still refreshes the pane. That is wanted.
+  const selectedEvent = computed<ArgusEvent | null>(() => {
+    const id = selectedId.value;
+    return id == null ? null : events.value.find((e) => e.id === id) ?? null;
+  });
 
   // Undo snapshot for Shift+X clear. Expires on next write.
   let lastClearSnapshot: readonly ArgusEvent[] | null = null;
@@ -250,6 +275,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     filteredEvents,
     redirectOrigins,
     linkedIds,
+    selectedEvent,
     paused,
     view,
     theme,

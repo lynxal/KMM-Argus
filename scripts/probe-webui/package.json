@@ -8,7 +8,8 @@
     "probe:version": "node version-probe.js",
     "probe:related-logs": "node related-logs-probe.js",
     "probe:follow-tail": "node follow-tail-probe.js",
-    "probes": "npm run probe:version && npm run probe:related-logs && npm run probe:follow-tail"
+    "probe:json-expand": "node json-expand-probe.js",
+    "probes": "npm run probe:version && npm run probe:related-logs && npm run probe:follow-tail && npm run probe:json-expand"
   },
   "dependencies": {
     "ws": "^8.18.0"

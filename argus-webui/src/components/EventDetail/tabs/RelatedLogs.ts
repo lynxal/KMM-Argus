@@ -24,7 +24,9 @@ import { STATUS_BUCKET_TEXT } from '../../FilterBar/FilterBar.states';
  * the request it ran under. The label is deliberate, not an oversight — leave it be.
  */
 export function renderRelatedLogs(event: HttpEvent | LogEvent, store: EventStore): HTMLElement {
-  const group = correlationGroup(store.events.value, event);
+  // `peek`, not `.value` — see the note in HttpTabs.renderOverview. Subscribing the
+  // detail pane's effect to the whole event list rebuilds it on every ingest.
+  const group = correlationGroup(store.events.peek(), event);
   const box = document.createElement('div');
   box.className = 'flex flex-col gap-1 font-mono text-xs';
   box.dataset['relatedLogs'] = '';

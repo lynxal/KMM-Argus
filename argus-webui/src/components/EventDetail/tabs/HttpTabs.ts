@@ -41,6 +41,7 @@ export function createHttpTabs({ event, active, store, bus }: HttpTabsProps): HT
           sizeBytes: event.request.sizeBytes,
           truncatedTotalBytes: event.request.bodyTruncatedTotalBytes,
           downloadName: `argus-http-${event.id}-request`,
+          expandKey: `http-${event.id}-request`,
           bus,
         }),
       );
@@ -55,6 +56,7 @@ export function createHttpTabs({ event, active, store, bus }: HttpTabsProps): HT
             sizeBytes: event.response.sizeBytes,
             truncatedTotalBytes: event.response.bodyTruncatedTotalBytes,
             downloadName: `argus-http-${event.id}-response`,
+            expandKey: `http-${event.id}-response`,
             bus,
           }),
         );
@@ -75,6 +77,7 @@ export function createHttpTabs({ event, active, store, bus }: HttpTabsProps): HT
           body: JSON.stringify(event, null, 2),
           contentType: 'application/json',
           downloadName: `argus-http-${event.id}-raw`,
+          expandKey: `http-${event.id}-raw`,
           bus,
         }),
       );
@@ -129,7 +132,13 @@ function renderOverview(event: HttpEvent, store: EventStore): HTMLElement {
   // one-row list. Lives in the overview, which renders on every tab, because the
   // hops are not adjacent in the event list and this is the only place the whole
   // chain is visible at once.
-  const chain = redirectChain(store.events.value, event);
+  // `peek`, not `.value`: this runs inside EventDetail's effect, and subscribing it
+  // to the whole event list would rebuild the pane on every ingest again — the very
+  // thing store.selectedEvent exists to stop. The chain is therefore as it stood
+  // when the row was selected, and refreshes on reselect or a tab switch. Fine: a
+  // hop is immutable once emitted, and the event list's linked-row highlight stays
+  // live regardless, off store.linkedIds.
+  const chain = redirectChain(store.events.peek(), event);
   if (chain.length > 1) box.appendChild(renderRedirectChain(event, chain, store));
 
   return box;

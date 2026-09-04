@@ -72,6 +72,7 @@ export function createLogTabs({ event, active, store, bus }: LogTabsProps): HTML
           body: JSON.stringify(event, null, 2),
           contentType: 'application/json',
           downloadName: `argus-log-${event.id}-raw`,
+          expandKey: `log-${event.id}-raw`,
           bus,
         }),
       );
