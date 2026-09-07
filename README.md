@@ -636,7 +636,7 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 
 ![Event list](docs/ui/event-list.png)
 
-**Detail tabs.** The right pane in split view (above) shows a tabbed detail per event. HTTP events: `Overview · Headers · Request · Response · Timing · cURL`. Log events: `Overview · Context · Stack`. Custom events: `Overview · Payload`. Bodies render as syntax-highlighted JSON, plain text, hex+ASCII, or image preview based on content type.
+**Detail tabs.** The right pane in split view (above) shows a tabbed detail per event. HTTP events: `Headers · Request · Response · Timing · Related Logs · Raw`. Log events: `Message · Payload · Stack Trace · Related Logs · Raw`. Custom events: `Payload · Metadata · Raw`. Bodies render as syntax-highlighted JSON, plain text, hex+ASCII, or image preview based on content type. Copy-as-cURL is on the event, not a tab — see **Export** below.
 
 **Filters.** Toggle source (HTTP/LOG/CUSTOM), method (GET/POST/PUT/PATCH/DELETE/OTHER), status class (2xx/3xx/4xx/5xx/ERR), and log level (ERROR/WARN/INFO/DEBUG/VERB) as filled chips. Add text filters for host, tag, and free-text contains. Active filters are tinted in the source's color.
 
@@ -648,7 +648,7 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 
 **Export.** Copy any event as cURL. Headers and bodies copy individually. The whole stream exports as JSON.
 
-**Keyboard shortcuts.** `/` focuses search. `j` / `k` navigate the event list. `1` / `2` / `3` switch List / Split / Waterfall views. `p` pauses live ingest. `?` opens the shortcut overlay.
+**Keyboard shortcuts.** `/` focuses search. `j` / `k` navigate the event list. `w` cycles List → Split → Waterfall, and `[` / `]` move between detail tabs. `f` opens Add filter, `x` clears all filters. `p` pauses live ingest. `?` opens the shortcut overlay, which lists every binding.
 
 ## 9. Configuration reference
 
@@ -714,11 +714,20 @@ and that matters to you, move the call to a background dispatcher.
 #### Starting on demand (start/stop from your debug UI)
 
 The guide above starts Argus once in `Application.onCreate()`, which is what most apps want. If you
-instead want to start and stop it from a debug menu, there's one thing to get right: **every
-`Argus.start()` creates a fresh server with a fresh event bus and a fresh ring buffer, and a
-stopped handle is spent.** Wire your capture plugins straight to `handle.eventBus` and after one
-stop/start cycle they'll still be publishing into the previous run's buffer — the inspector comes
-back up and shows nothing.
+instead want to start and stop it from a debug menu, two things matter.
+
+**`start()` hands back the running instance if there already is one.** Argus keeps one live server
+per process, so a second `start()` — from a re-initialised app, or a debug button pressed twice —
+returns the existing handle instead of binding another port. That call's configuration is
+**ignored** and a warning says so; call `stop()` first to restart with different settings. A handle
+that *failed* to bind is the exception: it can never rebind, so `start()` replaces it rather than
+handing back something permanently dead. If two threads call `start()` at once the last one wins,
+and the server the other bound is stopped rather than left running unreachable.
+
+**Each genuinely new `start()` creates a fresh server, a fresh event bus and a fresh ring buffer,
+and a stopped handle is spent.** So wire your capture plugins straight to `handle.eventBus` and
+after one stop/start cycle they'll still be publishing into the previous run's buffer — the
+inspector comes back up and shows nothing.
 
 Give the plugins a stable bus that forwards to whichever run is current:
 

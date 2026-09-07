@@ -122,9 +122,24 @@ build when any of them disagrees, and also fails if a hardcoded `ARGUS_VERSION` 
    (**irreversible** — a published version cannot be deleted or replaced), builds
    the XCFramework, uploads `argus_ios.xcframework.zip` as a release asset, and
    appends the asset URL and its SHA-256 to the release notes.
-6. Copy that checksum into `Package.swift`'s `binaryTarget` and commit it to
-   `main`. It can only be done after the fact: the checksum is of the zip CI
-   built, so a locally built zip would not match.
+6. **Click Publish in the Central Portal.** A green workflow does not mean the
+   artifacts are on Maven Central. All seven modules call `publishToMavenCentral()`,
+   which defaults `automaticRelease = false`, and the workflow runs
+   `publishAllPublicationsToMavenCentralRepository` — that uploads the deployment
+   and never releases it. So the deployment sits in the Portal awaiting a manual
+   **Publish**, and `repo1` only serves it after that plus mirror lag. This is
+   what made 1.0.0 look like a failed publish.
+
+   One line would remove this step: `arguments: publishAndReleaseToMavenCentral`
+   in `publishToMavenCentral.yml`. The plugin queues the release as an
+   end-of-build action, so it is safe across the seven modules regardless of task
+   order. Deliberately not taken yet — it cannot be proven until a real release
+   run fires, and 1.0.1 was not the release to test it on.
+7. Copy the printed checksum into `Package.swift`'s `binaryTarget` and commit it
+   to `main`. It can only be done after the fact: the checksum is of the zip CI
+   built, so a locally built zip would not match. Until then `Package.swift` on
+   `main` carries the new asset URL with the previous release's checksum, so SPM
+   consumers tracking `main` see a mismatch in that window.
 
 ## Reference
 
