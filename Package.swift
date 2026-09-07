@@ -23,7 +23,7 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "argus_ios",
-            url: "https://github.com/lynxal/KMM-Argus/releases/download/1.0.0/argus_ios.xcframework.zip",
+            url: "https://github.com/lynxal/KMM-Argus/releases/download/1.0.1/argus_ios.xcframework.zip",
             checksum: "de5a81355dc605c193e5907a7698a908fce83144a6a145ada13faa547da8dd8f"
         ),
     ]

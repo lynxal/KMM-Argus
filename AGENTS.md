@@ -101,18 +101,20 @@ Then in the consumer add `mavenLocal()` to `dependencyResolutionManagement.repos
 `gradle.properties → argus.version` is the only place the version is written.
 Module `coordinates(…)` read it, and `:argus-core`'s `buildkonfig` block stamps
 it into `ArgusBuildKonfig.ARGUS_VERSION`, which is what `/api/info` and the
-WebSocket `hello` frame report. Docs, `argus-webui/package.json`, and
-`Package.swift` restate it by hand; `:verifyVersionPins` fails the build when any
-of them disagrees, and also fails if a hardcoded `ARGUS_VERSION` literal reappears.
+WebSocket `hello` frame report. Docs, the npm manifests, the Web UI's mock
+device, and `Package.swift` restate it by hand; `:verifyVersionPins` fails the
+build when any of them disagrees, and also fails if a hardcoded `ARGUS_VERSION` literal reappears.
 
 1. Bump `argus.version` in `gradle.properties`.
 2. Update every hand-written pin, then `./gradlew :verifyVersionPins` until green:
    `README.md` (§2 status row, dependency snippets, module table), `AGENTS.md`,
-   `argus-webui/package.json` + `package-lock.json`, and the `Package.swift`
-   asset URL.
+   `argus-webui/package.json` + `package-lock.json`, the `Package.swift` asset
+   URL, and `argus-webui/src/dev/fixtures/events.ts` (`argusVersion` — the mock
+   device the top bar renders when no phone is attached, and what the `docs/ui/`
+   screenshots show).
 3. Dispatch **both** Verify workflows against `main`. Neither fires at release
    time — see the comment at the top of `publishToMavenCentral.yml`.
-4. Tag the merge commit with the bare version, **no `v` prefix** — `git tag 1.0.0`.
+4. Tag the merge commit with the bare version, **no `v` prefix** — `git tag 1.0.1`.
    The tag must match `argus.version` exactly; `publishToMavenCentral.yml` builds
    the SPM asset URL from the tag name, and nothing enforces the match.
 5. Create the GitHub Release for that tag. This is what triggers

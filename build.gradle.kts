@@ -24,6 +24,7 @@ val pinnedFiles = listOf(
     "Package.swift",
     "argus-webui/package.json",
     "argus-webui/package-lock.json",
+    "argus-webui/src/dev/fixtures/events.ts",
 ).map { layout.projectDirectory.file(it) }
 
 // Files that legitimately carry a version unrelated to argus.version: the
@@ -86,6 +87,15 @@ tasks.register("verifyVersionPins") {
         val assetUrl = Regex("""releases/download/(\d+\.\d+\.\d+)/argus_ios\.xcframework\.zip""")
         if (scan("Package.swift", "XCFramework asset URL", assetUrl) == 0) {
             problems += "Package.swift  binaryTarget release-asset URL not found — has the regex rotted?"
+        }
+
+        // The mock device the Web UI falls back to when no phone is attached. It
+        // is what the top bar renders in mock mode, so it is also what the
+        // README screenshots show — a stale value here ships a screenshot
+        // advertising the wrong library version.
+        val fixtureVersion = Regex("""argusVersion:\s*'(\d+\.\d+\.\d+)'""")
+        if (scan("events.ts", "mock device argusVersion", fixtureVersion) == 0) {
+            problems += "argus-webui/src/dev/fixtures/events.ts  argusVersion not found — has the regex rotted?"
         }
 
         // npm manifests are PARSED, not matched: package-lock.json carries a
