@@ -627,3 +627,41 @@ kbd.ds-kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ==============================================================
+   Narrow event-list rows (#31). The waterfall pane's list is
+   draggable, and the split view's list gets cramped on a small
+   window; both shed the same two cells below NARROW_LIST_WIDTH so
+   the trailing timestamp stays inside the pane instead of being
+   clipped against its right edge.
+
+   Nothing is lost: the engine chip carries `title="engine: …"`,
+   the redirect pill's title names the origin hop it continues, and
+   both are spelled out in the detail pane. A hidden flex item gets
+   no gap either, so dropping the chip reclaims its 8px as well —
+   and it leaves HTTP and LOG rows with the same 80px of fixed
+   cells, so their text columns finally line up.
+
+   Attribute on the list root rather than classes on the row: rows
+   are pooled by the virtual list and only rebuilt on a pool miss,
+   so a per-row rule would force a full rebuild on every frame of a
+   splitter drag.
+   ============================================================== */
+[data-list-narrow] .ds-row-engine,
+[data-list-narrow] .ds-row-redirect-label {
+  display: none;
+}
+
+/* Splitter between the waterfall's list and its canvas. The handle is
+   `SPLITTER_WIDTH` of hit area standing in for the layout's gutter; this is the
+   1px mark inside it, lit on hover, focus and drag so the affordance is visible
+   before the pointer commits. */
+.ds-splitter:hover .ds-splitter-rule,
+.ds-splitter:focus-visible .ds-splitter-rule,
+.ds-splitter[data-dragging] .ds-splitter-rule {
+  background: var(--border-focus);
+}
+
+.ds-splitter:focus-visible {
+  outline: none;
+}

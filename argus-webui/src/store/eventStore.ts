@@ -9,6 +9,14 @@ import { linkedEventIds } from './related';
 /** Ring-buffer cap. README default; configurable at store creation. */
 export const DEFAULT_MAX_EVENTS = 10_000;
 
+/**
+ * Starting width of the waterfall view's event-list pane. Matches the `w-80` it
+ * replaces, so the view opens exactly as it did before the splitter existed.
+ * The bounds live with the splitter in SplitView.states.ts — they need a measured
+ * container, which the store has no business knowing about.
+ */
+export const DEFAULT_WATERFALL_LIST_WIDTH = 320;
+
 export type View = 'list' | 'split' | 'waterfall';
 export type Theme = 'light' | 'dark';
 export type Density = 'compact' | 'comfy';
@@ -50,6 +58,12 @@ export interface EventStore {
   readonly density: Signal<Density>;
   /** Show the optional correlationId column in the EventList. */
   readonly showCorrelationId: Signal<boolean>;
+  /**
+   * Width in px of the event-list pane in the waterfall view, set by dragging the
+   * splitter. Stored unclamped: the bounds depend on the pane's measured container,
+   * so SplitView re-clamps this on its first layout pass and on every resize.
+   */
+  readonly waterfallListWidth: Signal<number>;
 
   readonly selectedId: Signal<string | null>;
   readonly selectionSource: Signal<SelectionSource>;
@@ -84,6 +98,16 @@ function restoreFilters(): Filters {
 }
 
 /**
+ * Reads the persisted waterfall list width. `loadString` hands back whatever is in
+ * storage, so a hand-edited or half-written value has to be rejected here rather
+ * than becoming a `NaN` width that no clamp can recover.
+ */
+function restoreListWidth(): number {
+  const parsed = Number.parseInt(loadString('waterfallListWidth', ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_WATERFALL_LIST_WIDTH;
+}
+
+/**
  * Build a fresh signal-backed store. One store per app — if you need a new
  * scenario (tests, Storybook), create a new store rather than resetting a
  * shared one.
@@ -99,6 +123,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   const theme = signal<Theme>(loadString('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') as Theme);
   const density = signal<Density>(loadString('density', 'compact') as Density);
   const showCorrelationId = signal<boolean>(loadString<string>('showCorrelationId', 'false') === 'true');
+  const waterfallListWidth = signal<number>(restoreListWidth());
 
   const selectedId = signal<string | null>(null);
   const selectionSource = signal<SelectionSource>('mouse');
@@ -253,6 +278,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
   effect(() => saveString('theme', theme.value));
   effect(() => saveString('density', density.value));
   effect(() => saveString('showCorrelationId', String(showCorrelationId.value)));
+  effect(() => saveString('waterfallListWidth', String(waterfallListWidth.value)));
   effect(() => saveJson('detailTab', detailTab.value));
 
   // Persist sourceLabels filter only — other filters intentionally remain
@@ -281,6 +307,7 @@ export function createEventStore(opts: EventStoreOptions = {}): EventStore {
     theme,
     density,
     showCorrelationId,
+    waterfallListWidth,
     selectedId,
     selectionSource,
     filters,

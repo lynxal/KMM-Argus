@@ -3,7 +3,7 @@ import type { EventStore } from '../../store/eventStore';
 import type { ArgusEvent } from '../../transport/schema';
 import { createVirtualList } from './virtual';
 import { applyRowLinked, applyRowRedirect, applyRowSelection, createEventRow } from './Row';
-import { unseenCount } from './EventList.states';
+import { isNarrowList, unseenCount } from './EventList.states';
 import { createIconEl } from '../Primitives/Primitives';
 
 export interface EventListProps {
@@ -79,6 +79,18 @@ export function createEventList({ store }: EventListProps): HTMLElement {
     following.value = true;
   });
   wrapper.appendChild(pill);
+
+  // Narrow rows are driven by an attribute on this wrapper rather than classes on
+  // each row: rows are pooled and only rebuilt on a pool miss (virtual.ts), so a
+  // per-row approach would mean invalidateAll() on every frame of a splitter drag.
+  // One attribute here restyles every live row and every future one for free.
+  //
+  // Observing the list itself, not the view that hosts it, so the split view's
+  // list on a small window degrades the same way the waterfall's does.
+  const narrowObserver = new ResizeObserver(() => {
+    wrapper.toggleAttribute('data-list-narrow', isNarrowList(wrapper.clientWidth));
+  });
+  narrowObserver.observe(wrapper);
 
   // Effects
 
