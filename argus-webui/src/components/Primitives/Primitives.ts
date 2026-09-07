@@ -7,7 +7,9 @@ export function createSrcBadge(kind: EventSource, size: 'sm' | 'md' = 'sm'): HTM
   const bg = kind === 'HTTP' ? 'bg-src-http-bg' : kind === 'LOG' ? 'bg-src-log-bg' : 'bg-src-custom-bg';
   const fg = kind === 'HTTP' ? 'text-src-http-fg' : kind === 'LOG' ? 'text-src-log-fg' : 'text-src-custom-fg';
   const brd = kind === 'HTTP' ? 'border-src-http-brd' : kind === 'LOG' ? 'border-src-log-brd' : 'border-src-custom-brd';
-  el.className = ['ds-src-badge', size === 'md' ? 'ds-src-badge--md' : '', bg, fg, brd].join(' ');
+  // `flex-none`: both callers place the badge in a flex row, and a shrinking badge
+  // squashes its own text rather than letting the flexible cell beside it give way.
+  el.className = ['ds-src-badge', 'flex-none', size === 'md' ? 'ds-src-badge--md' : '', bg, fg, brd].join(' ');
   el.textContent = kind;
   return el;
 }

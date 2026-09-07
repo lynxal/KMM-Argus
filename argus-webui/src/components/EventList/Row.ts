@@ -111,7 +111,7 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
   if (isHttpEvent(event)) {
     const method = document.createElement('span');
     const m = (event.request.method.toUpperCase() as keyof typeof METHOD_COLORS) ?? 'OTHER';
-    method.className = `${METHOD_COLORS[m] ?? 'text-fg-2'} font-mono w-10`;
+    method.className = `${METHOD_COLORS[m] ?? 'text-fg-2'} font-mono w-10 flex-none`;
     method.textContent = event.request.method.toUpperCase().slice(0, 6);
     row.appendChild(method);
 
@@ -119,7 +119,7 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
 
     const bucket = statusClass(event.response?.statusCode ?? null);
     const statusEl = document.createElement('span');
-    statusEl.className = `flex items-center gap-1 ${STATUS_BUCKET_TEXT[bucket]} font-mono w-10`;
+    statusEl.className = `flex items-center gap-1 ${STATUS_BUCKET_TEXT[bucket]} font-mono w-10 flex-none`;
     const dot = document.createElement('span');
     dot.className = `ds-conn-dot ${STATUS_BUCKET_DOTS[bucket]}`;
     statusEl.append(dot);
@@ -131,7 +131,10 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     row.appendChild(createRedirectPill());
 
     const text = document.createElement('span');
-    text.className = 'flex-1 font-mono truncate';
+    text.className = 'flex-1 min-w-0 font-mono truncate';
+    // The pane is resizable down to a width where this shows a handful of
+    // characters, so the full value has to stay readable somewhere.
+    text.title = `${event.request.host}${event.request.path}`;
     const host = document.createElement('span');
     host.className = 'text-fg-3';
     host.textContent = event.request.host;
@@ -146,16 +149,17 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
   } else if (isLogEvent(event)) {
     const level = document.createElement('span');
     const tone = LEVEL_TONES[event.level];
-    level.className = `${tone.fg} font-mono w-10 uppercase`;
+    level.className = `${tone.fg} font-mono w-10 flex-none uppercase`;
     level.textContent = LOG_LEVEL_LABELS[event.level];
     row.appendChild(level);
 
     const spacer = document.createElement('span');
-    spacer.className = 'w-10';
+    spacer.className = 'w-10 flex-none';
     row.appendChild(spacer);
 
     const text = document.createElement('span');
-    text.className = 'flex-1 font-mono truncate';
+    text.className = 'flex-1 min-w-0 font-mono truncate';
+    text.title = event.tag ? `[${event.tag}] ${event.message}` : event.message;
     const tagEl = document.createElement('span');
     tagEl.className = 'text-fg-3';
     tagEl.textContent = event.tag ? `[${event.tag}] ` : '';
@@ -166,16 +170,17 @@ export function createEventRow(event: ArgusEvent, ctx: RowContext): HTMLElement 
     row.appendChild(text);
   } else if (isCustomEvent(event)) {
     const label = document.createElement('span');
-    label.className = 'text-fg-2 font-mono w-10 truncate';
+    label.className = 'text-fg-2 font-mono w-10 flex-none truncate';
     label.textContent = event.sourceLabel.slice(0, 8);
     row.appendChild(label);
 
     const spacer = document.createElement('span');
-    spacer.className = 'w-10';
+    spacer.className = 'w-10 flex-none';
     row.appendChild(spacer);
 
     const text = document.createElement('span');
-    text.className = 'flex-1 font-mono truncate';
+    text.className = 'flex-1 min-w-0 font-mono truncate';
+    text.title = `${event.label} ${event.payload}`;
     const nameEl = document.createElement('span');
     nameEl.className = 'text-fg-1';
     nameEl.textContent = event.label + ' ';
@@ -211,8 +216,18 @@ function createRedirectPill(): HTMLElement {
   span.hidden = true;
   span.style.display = 'none';
   span.className =
-    'inline-flex items-center px-1 h-4 rounded-xs border text-xxs font-mono leading-none text-status-3xx-fg border-status-3xx-fg/30';
-  span.textContent = '↳ REDIRECTED';
+    'inline-flex flex-none whitespace-nowrap items-center px-1 h-4 rounded-xs border text-xxs font-mono leading-none text-status-3xx-fg border-status-3xx-fg/30';
+  // The glyph and the word are separate nodes so narrow mode can drop the word
+  // and keep the marker. Without `whitespace-nowrap` above, the label wraps inside
+  // a fixed `h-4` box and spills over the rows above and below it.
+  span.appendChild(document.createTextNode('↳'));
+  const label = document.createElement('span');
+  label.className = 'ds-row-redirect-label';
+  // Non-breaking space, not a plain one: the pill is a flex container, and a
+  // leading collapsible space at the start of a flex item is stripped, which
+  // renders "↳REDIRECTED".
+  label.textContent = '\u00a0REDIRECTED';
+  span.appendChild(label);
   return span;
 }
 
@@ -257,12 +272,19 @@ function createEngineChip(engine: string): HTMLElement {
   const span = document.createElement('span');
   const label = ENGINE_LABELS[engine] ?? engine.toUpperCase();
   const tone = ENGINE_TONES[engine] ?? 'text-fg-3 border-border-default';
-  span.className = `inline-flex items-center px-1 h-4 rounded-xs border text-xxs font-mono leading-none ${tone}`;
+  span.className = `ds-row-engine inline-flex flex-none items-center px-1 h-4 rounded-xs border text-xxs font-mono leading-none ${tone}`;
   span.textContent = label;
   span.title = `engine: ${engine}`;
   return span;
 }
 
+/**
+ * Optional correlationId column. The one cell here that deliberately does NOT get
+ * `flex-none`: `truncate` zeroes its automatic minimum size, and since the
+ * path cell's flex basis is 0 it absorbs none of any shortfall, so all of it lands
+ * here and truncates cleanly. Pinning this cell instead pushes the row's trailing
+ * cells past the pane's right edge whenever the column is on at the minimum width.
+ */
 function createCorrelationCell(event: ArgusEvent): HTMLElement {
   const cell = document.createElement('span');
   cell.className = 'text-fg-3 font-mono w-16 truncate';
@@ -284,7 +306,7 @@ function createCorrelationCell(event: ArgusEvent): HTMLElement {
  */
 function createMetaCell(timestamp: number): HTMLElement {
   const cell = document.createElement('span');
-  cell.className = 'text-fg-3 font-mono text-xs w-24 text-right tabular-nums';
+  cell.className = 'text-fg-3 font-mono text-xs w-24 flex-none text-right tabular-nums';
   cell.textContent = formatTime(timestamp);
   return cell;
 }

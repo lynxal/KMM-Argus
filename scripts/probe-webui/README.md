@@ -3,9 +3,9 @@
 Probes for the argus Web UI, in two groups.
 
 **Run in CI** (`.github/workflows/verify-webui.yml`, via `npm run probes`) — `version-probe.js`,
-`related-logs-probe.js`, `follow-tail-probe.js`, `json-expand-probe.js`. All four fake the device
-in-process through `fake-device.js`, so they need no device and no host app, only a built
-`argus-webui/dist/`.
+`related-logs-probe.js`, `follow-tail-probe.js`, `json-expand-probe.js`, `splitter-probe.js`. All
+five fake the device in-process through `fake-device.js`, so they need no device and no host app,
+only a built `argus-webui/dist/`.
 
 **Manual only** — `ws-probe.js` and `ui-probe.js`. Both need a real argus server on
 `http://localhost:8787`, which in CI would mean an Android emulator job running the sample app.
@@ -21,7 +21,7 @@ npm ci
 npx playwright install chromium
 ```
 
-Then, for the four self-contained probes:
+Then, for the five self-contained probes:
 
 ```bash
 cd ../../argus-webui && npm ci && npm run build   # they serve dist/
@@ -182,7 +182,47 @@ carrying the top bar and filter bar off screen, while `scrollTop` stayed 0 whate
 The shell is `h-dvh` now. If a scroll assertion here ever starts reading 0, check that before
 suspecting the probe.
 
-## fake-device.js — the in-process device the four CI probes share
+## splitter-probe.js — the waterfall pane resizes, and rows fit inside it
+
+Regression probe for [#31](https://github.com/lynxal/KMM-Argus/issues/31) — "waterfall list pane is
+a fixed 320px, so long rows clip with no way to widen it". Covers both halves of that fix together,
+because either one alone is insufficient: a splitter that can reach a width where rows still clip is
+not a fix, and rows that fit at 320px are no use if 320px is all you can have.
+
+Backfills 20 HTTP events, 8 logs, and one pair of hops sharing a `requestGroupId` so the second gets
+a real redirect pill — the widest cell in the row, and the one that broke the layout. Its path is
+deliberately ~140 characters. The engine is `okhttp`, not the fixtures' usual `ktor`: `OKHTTP` is the
+longest engine label, so it is what decides whether the wide row fits.
+
+Asserts, at several widths:
+
+- The pane opens at the 320px default, tracks a pointer drag, and clamps at both ends — narrow to
+  `MIN_LIST_WIDTH`, wide to `available − SPLITTER_WIDTH − MIN_WATERFALL_WIDTH`.
+- **No cell escapes its row**, horizontally or vertically, at the floor and on both sides of the
+  narrow-mode threshold. This is the actual bug: rows are absolutely positioned `left:0; right:0`
+  inside an `overflow-x-hidden` viewport, so a cell past the row's right edge is not drawn at all.
+  Before the fix the timestamp on a pill row overflowed by 40px and the path cell was squeezed to
+  0px wide. The vertical half catches the other failure mode — an un-`nowrap`'d pill label wrapping
+  inside its fixed-height box and spilling onto the neighbouring rows.
+- Narrow mode is asserted by **computed `display`**, never by `textContent` or a class: a
+  `display: none` child still contributes its text to `textContent`, so only the measured box says
+  whether the redirect label was really dropped. Same reason `version-probe.js` measures rather
+  than reads.
+- The long path truncates with a real ellipsis and keeps its full value in a `title`.
+- With the optional correlationId column switched on at the floor width, still nothing overflows.
+  That column's cell is the one cell deliberately left shrinkable, so that it soaks up the whole
+  shortfall and truncates rather than shoving the trailing cells off the edge — a claim about flex
+  behaviour, measured here rather than asserted in a comment.
+- The drag does **not** rescale the waterfall canvas — `computeScale` ignores its viewport argument,
+  and this asserts that rather than trusting it.
+- The width persists to `argus.webui.waterfallListWidth` and survives a reload.
+- The handle is keyboard-operable: `ArrowLeft` nudges, `Home` resets.
+
+The three width constants at the top of the file mirror `SplitView.states.ts` and
+`EventList.states.ts`. They are duplicated on purpose — if the source constants move somewhere the
+row no longer fits, this probe is what says so.
+
+## fake-device.js — the in-process device the CI probes share
 
 Serves the built `argus-webui/dist/` plus `/api/info`, `/api/events`, and `WS /ws` on an ephemeral
 port, and hands back a `push(event)` for emitting over the socket mid-run. Serving the bundle
