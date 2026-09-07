@@ -18,7 +18,7 @@ In practice, that means: in-app debug tooling for Kotlin Multiplatform apps. Arg
 
 | Attribute | Value |
 |---|---|
-| Version | `1.0.0` |
+| Version | `1.0.1` |
 | Platforms | Android, iOS (Ktor-host apps) |
 | `minSdk` | 24 |
 | `compileSdk` / `targetSdk` | 36 |
@@ -46,8 +46,8 @@ Every code block below is copied verbatim from [`:sample`](./sample), which is g
 
 ```kotlin
 dependencies {
-    debugImplementation("com.lynxal.argus:argus-android:1.0.0")
-    // stagingImplementation("com.lynxal.argus:argus-android:1.0.0") // optional, see §5
+    debugImplementation("com.lynxal.argus:argus-android:1.0.1")
+    // stagingImplementation("com.lynxal.argus:argus-android:1.0.1") // optional, see §5
 }
 ```
 
@@ -348,7 +348,7 @@ let handle = Argus.shared.start { config in
 #endif
 ```
 
-The XCFramework is built by Gradle (`./gradlew :argus-ios:assembleArgus-iosReleaseXCFramework`) and published as a release asset on each Argus release. KMP-based apps should keep using `implementation("com.lynxal.argus:argus-ios:1.0.0")` from Maven Central — the steps below describe that path.
+The XCFramework is built by Gradle (`./gradlew :argus-ios:assembleArgus-iosReleaseXCFramework`) and published as a release asset on each Argus release. KMP-based apps should keep using `implementation("com.lynxal.argus:argus-ios:1.0.1")` from Maven Central — the steps below describe that path.
 
 ### Step 1 — Add iOS targets to your KMP module + Xcode build-phase script
 
@@ -591,7 +591,7 @@ It runs `xcodebuild -configuration Release -destination 'generic/platform=iOS Si
 Argus does not define a `staging` build type — that's a consumer concern. If your app has a staging variant and you want Argus there too:
 
 1. Add a `staging` build type in your `app/build.gradle.kts` (typically `initWith debug`).
-2. Add the dependency: `stagingImplementation("com.lynxal.argus:argus-android:1.0.0")`.
+2. Add the dependency: `stagingImplementation("com.lynxal.argus:argus-android:1.0.1")`.
 3. Create `src/staging/kotlin/.../debug/DebugToolsImpl.kt` mirroring the debug source-set impl from §4.
 
 The same source-set seam pattern works for any number of variants. What it never does is leak Argus into `release`.
@@ -636,7 +636,7 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 
 ![Event list](docs/ui/event-list.png)
 
-**Detail tabs.** The right pane in split view (above) shows a tabbed detail per event. HTTP events: `Overview · Headers · Request · Response · Timing · cURL`. Log events: `Overview · Context · Stack`. Custom events: `Overview · Payload`. Bodies render as syntax-highlighted JSON, plain text, hex+ASCII, or image preview based on content type.
+**Detail tabs.** The right pane in split view (above) shows a tabbed detail per event. HTTP events: `Headers · Request · Response · Timing · Related Logs · Raw`. Log events: `Message · Payload · Stack Trace · Related Logs · Raw`. Custom events: `Payload · Metadata · Raw`. Bodies render as syntax-highlighted JSON, plain text, hex+ASCII, or image preview based on content type. Copy-as-cURL is on the event, not a tab — see **Export** below.
 
 **Filters.** Toggle source (HTTP/LOG/CUSTOM), method (GET/POST/PUT/PATCH/DELETE/OTHER), status class (2xx/3xx/4xx/5xx/ERR), and log level (ERROR/WARN/INFO/DEBUG/VERB) as filled chips. Add text filters for host, tag, and free-text contains. Active filters are tinted in the source's color.
 
@@ -648,7 +648,7 @@ If logcat isn't handy (Canvas Hub firmware, headless device), enter the device's
 
 **Export.** Copy any event as cURL. Headers and bodies copy individually. The whole stream exports as JSON.
 
-**Keyboard shortcuts.** `/` focuses search. `j` / `k` navigate the event list. `1` / `2` / `3` switch List / Split / Waterfall views. `p` pauses live ingest. `?` opens the shortcut overlay.
+**Keyboard shortcuts.** `/` focuses search. `j` / `k` navigate the event list. `w` cycles List → Split → Waterfall, and `[` / `]` move between detail tabs. `f` opens Add filter, `x` clears all filters. `p` pauses live ingest. `?` opens the shortcut overlay, which lists every binding.
 
 ## 9. Configuration reference
 
@@ -714,11 +714,20 @@ and that matters to you, move the call to a background dispatcher.
 #### Starting on demand (start/stop from your debug UI)
 
 The guide above starts Argus once in `Application.onCreate()`, which is what most apps want. If you
-instead want to start and stop it from a debug menu, there's one thing to get right: **every
-`Argus.start()` creates a fresh server with a fresh event bus and a fresh ring buffer, and a
-stopped handle is spent.** Wire your capture plugins straight to `handle.eventBus` and after one
-stop/start cycle they'll still be publishing into the previous run's buffer — the inspector comes
-back up and shows nothing.
+instead want to start and stop it from a debug menu, two things matter.
+
+**`start()` hands back the running instance if there already is one.** Argus keeps one live server
+per process, so a second `start()` — from a re-initialised app, or a debug button pressed twice —
+returns the existing handle instead of binding another port. That call's configuration is
+**ignored** and a warning says so; call `stop()` first to restart with different settings. A handle
+that *failed* to bind is the exception: it can never rebind, so `start()` replaces it rather than
+handing back something permanently dead. If two threads call `start()` at once the last one wins,
+and the server the other bound is stopped rather than left running unreachable.
+
+**Each genuinely new `start()` creates a fresh server, a fresh event bus and a fresh ring buffer,
+and a stopped handle is spent.** So wire your capture plugins straight to `handle.eventBus` and
+after one stop/start cycle they'll still be publishing into the previous run's buffer — the
+inspector comes back up and shows nothing.
 
 Give the plugins a stable bus that forwards to whichever run is current:
 
@@ -827,13 +836,13 @@ flowchart LR
 
 | Module | Coordinates | Purpose |
 |---|---|---|
-| `argus-core` | `com.lynxal.argus:argus-core:1.0.0` | Shared model, `ArgusClientPlugin` (Ktor capture), event bus, redaction. |
-| `argus-server-core` | `com.lynxal.argus:argus-server-core:1.0.0` | Embedded Ktor server: REST + WebSocket endpoints, event dispatcher, `ArgusConfig`. |
-| `argus-webui-bundle` | `com.lynxal.argus:argus-webui-bundle:1.0.0` | Pre-built SPA shipped as a JVM resource the server statically serves. |
-| `argus-android` | `com.lynxal.argus:argus-android:1.0.0` | Android entry point: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. |
-| `argus-ios` | `com.lynxal.argus:argus-ios:1.0.0` | iOS entry point for Apple targets: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. Also published as an XCFramework via Swift Package Manager (see §5). |
-| `argus-okhttp` | `com.lynxal.argus:argus-okhttp:1.0.0` | OkHttp `Interceptor` capture for non-Ktor JVM HTTP. |
-| `argus-urlconnection` | `com.lynxal.argus:argus-urlconnection:1.0.0` | `HttpURLConnection` capture wrapper for legacy JVM HTTP. |
+| `argus-core` | `com.lynxal.argus:argus-core:1.0.1` | Shared model, `ArgusClientPlugin` (Ktor capture), event bus, redaction. |
+| `argus-server-core` | `com.lynxal.argus:argus-server-core:1.0.1` | Embedded Ktor server: REST + WebSocket endpoints, event dispatcher, `ArgusConfig`. |
+| `argus-webui-bundle` | `com.lynxal.argus:argus-webui-bundle:1.0.1` | Pre-built SPA shipped as a JVM resource the server statically serves. |
+| `argus-android` | `com.lynxal.argus:argus-android:1.0.1` | Android entry point: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. |
+| `argus-ios` | `com.lynxal.argus:argus-ios:1.0.1` | iOS entry point for Apple targets: `Argus.start()`, `ArgusHandle`, `ArgusConfigBuilder`. Also published as an XCFramework via Swift Package Manager (see §5). |
+| `argus-okhttp` | `com.lynxal.argus:argus-okhttp:1.0.1` | OkHttp `Interceptor` capture for non-Ktor JVM HTTP. |
+| `argus-urlconnection` | `com.lynxal.argus:argus-urlconnection:1.0.1` | `HttpURLConnection` capture wrapper for legacy JVM HTTP. |
 
 **Why debug-only?** See [§3](#3-debug-only-distribution-model). The summary: the embedded server is a production-grade attack surface, and the seam-pattern source-set split (with the `verifyReleaseHasNoArgus` CI gate) is the only integration shape we support. There is no no-op artifact, by design — a missing release-side `DebugToolsImpl` is a build error, which is the desired failure mode.
 

@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "argus-probe-webui",
-  "description": "Probes for the argus Web UI. `probes` runs the self-contained ones in CI; `ws` and `ui` need a running argus server on http://localhost:8787/ and stay manual.",
+  "description": "Probes for the argus Web UI. `probes` runs the self-contained ones in CI; `ws` and `ui` need a running argus server on http://localhost:8787/ and stay manual; `docs-shots` regenerates docs/ui/*.png and is manual because it writes files instead of asserting anything.",
   "scripts": {
     "ws": "node ws-probe.js",
     "ui": "node ui-probe.js",
@@ -10,6 +10,7 @@
     "probe:follow-tail": "node follow-tail-probe.js",
     "probe:json-expand": "node json-expand-probe.js",
     "probe:splitter": "node splitter-probe.js",
+    "docs-shots": "node docs-shots.js",
     "probes": "npm run probe:version && npm run probe:related-logs && npm run probe:follow-tail && npm run probe:json-expand && npm run probe:splitter"
   },
   "dependencies": {
