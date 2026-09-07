@@ -1,0 +1,104 @@
+name: Publish XCFramework
+
+permissions:
+  contents: write
+
+# Builds the SPM XCFramework for an existing tag and attaches it to that tag's
+# GitHub Release. Deliberately separate from publishToMavenCentral.yml.
+#
+# Why this exists: in that workflow the XCFramework steps sit *after* the Maven
+# publish and are gated on `github.event_name == 'release'`. Two consequences bit
+# 1.0.1:
+#   * a workflow_dispatch run publishes to Maven and silently skips the framework;
+#   * once the Maven version is published, a re-run cannot get past the publish
+#     step (Central Portal rejects a duplicate version), so the framework steps
+#     are unreachable — the asset becomes impossible to produce.
+# Splitting it out means the framework can always be rebuilt from a tag without
+# touching Maven, which is irreversible and must never be re-attempted.
+#
+# Does NOT edit the release body. The other workflow appends an "SPM consumers"
+# block on release; doing it here too would duplicate that block on every re-run.
+# The checksum goes to the run summary instead — copy it into Package.swift's
+# binaryTarget and commit to main.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build from, e.g. 1.0.1 (bare, no v prefix)'
+        required: true
+        type: string
+
+jobs:
+  xcframework:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout the tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      # The asset is uploaded to a Release, not created alongside one, so a typo'd
+      # or unreleased tag would otherwise fail late — after a ~30 minute build.
+      - name: Require a Release for that tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "::error::No GitHub Release exists for tag '${{ inputs.tag }}'. Create it first."
+            exit 1
+          fi
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v3
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: zulu
+
+      - name: Cache Konan
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.versions.toml') }}
+
+      - name: Build argus-ios XCFramework
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          arguments: ":argus-ios:assembleArgus-iosReleaseXCFramework"
+
+      # Byte-for-byte the same zip+checksum recipe as publishToMavenCentral.yml.
+      # The checksum must be of the zip that actually gets uploaded, so compute
+      # and upload the same file — never rebuild between the two.
+      - name: Zip XCFramework + compute SHA-256
+        id: xcf
+        run: |
+          set -euo pipefail
+          XCF_DIR="argus-ios/build/XCFrameworks/release/argus_ios.xcframework"
+          ZIP_PATH="argus_ios.xcframework.zip"
+          (cd "$(dirname "$XCF_DIR")" && zip -r "../../../../$ZIP_PATH" "$(basename "$XCF_DIR")")
+          CHECKSUM=$(swift package compute-checksum "$ZIP_PATH")
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+          {
+            echo "## XCFramework for \`${{ inputs.tag }}\`"
+            echo
+            echo "Paste into \`Package.swift\` \`binaryTarget\` and commit to \`main\`:"
+            echo
+            echo '```swift'
+            echo "url: \"https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/argus_ios.xcframework.zip\","
+            echo "checksum: \"$CHECKSUM\""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Checksum (paste into Package.swift binaryTarget): $CHECKSUM"
+
+      - name: Attach to the Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: ${{ steps.xcf.outputs.zip_path }}
+          fail_on_unmatched_files: true

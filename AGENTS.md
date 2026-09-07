@@ -141,6 +141,13 @@ build when any of them disagrees, and also fails if a hardcoded `ARGUS_VERSION` 
    `main` carries the new asset URL with the previous release's checksum, so SPM
    consumers tracking `main` see a mismatch in that window.
 
+   **If the asset is missing.** The framework steps only run on the `release`
+   event and sit *after* the Maven publish, so a `workflow_dispatch` run skips
+   them, and once the Maven version is published a re-run cannot reach them at
+   all. Dispatch **Publish XCFramework** (`publishXcframework.yml`) with the tag
+   instead — it builds and attaches the asset without touching Maven, and prints
+   the checksum to the run summary. This is what 1.0.1 needed.
+
 ## Reference
 
 - Full README: `README.md` (integration guides, architecture diagram, config reference).
