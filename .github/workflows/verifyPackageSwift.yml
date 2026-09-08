@@ -1,0 +1,42 @@
+name: Verify Package.swift
+
+permissions:
+  contents: read
+
+# Checks that Package.swift's binaryTarget checksum is the SHA-256 of the asset
+# its own url points at -- the one thing SPM verifies, and the one thing
+# :verifyVersionPins cannot check, because at version-bump time the asset does
+# not exist yet.
+#
+# Runs on every push to main rather than on a paths filter, because the mistake
+# it exists to catch is Package.swift NOT being touched: a release is cut and
+# checklist step 7 is forgotten, so the manifest names the new asset while
+# hashing the old one. A filter on Package.swift would skip exactly that case.
+# The cost is one ~13 MB download.
+#
+# The weekly run is the real backstop. Nobody has to remember step 7; if it is
+# missed, this says so within a week instead of waiting for a consumer to
+# report an opaque SPM checksum error.
+#
+# Passes quietly while the asset is unpublished (HTTP 404). Maven Central needs
+# a manual Publish and then mirror time, so that window is not short, and a
+# check that cried wolf through it would be ignored by the time it mattered.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  checksum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify the binaryTarget checksum
+        run: scripts/verify-package-swift.sh
