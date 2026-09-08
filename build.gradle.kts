@@ -89,6 +89,36 @@ tasks.register("verifyVersionPins") {
             problems += "Package.swift  binaryTarget release-asset URL not found — has the regex rotted?"
         }
 
+        // Package.swift binaryTarget checksum. Correctness cannot be checked here:
+        // the value is the SHA-256 of a zip CI has not built yet, and between a
+        // version bump and the release it legitimately holds the PREVIOUS
+        // release's checksum. Shape is checkable, and shape is what broke 1.0.0 --
+        // it was tagged carrying "PLACEHOLDER_REPLACE_PER_RELEASE", so
+        // Package.swift at that tag still cannot resolve. scripts/verify-package-swift.sh
+        // is what catches a stale (as opposed to malformed) value, once the asset
+        // exists to compare against.
+        run {
+            val f = byName.getValue("Package.swift").asFile
+            val checksumLine = Regex("""checksum:\s*"([^"]*)"""")
+            val hex64 = Regex("""^[0-9a-f]{64}$""")
+            var hits = 0
+            f.readLines().forEachIndexed { index, line ->
+                checksumLine.findAll(line).forEach { match ->
+                    hits++
+                    val found = match.groupValues[1]
+                    if (!hex64.matches(found)) {
+                        problems += "Package.swift:${index + 1}  binaryTarget checksum is not a " +
+                            "SHA-256: found '$found'. It must be 64 lowercase hex characters — " +
+                            "carry the previous release's checksum until the new asset exists, " +
+                            "never a placeholder."
+                    }
+                }
+            }
+            if (hits == 0) {
+                problems += "Package.swift  binaryTarget checksum not found — has the regex rotted?"
+            }
+        }
+
         // The mock device the Web UI falls back to when no phone is attached. It
         // is what the top bar renders in mock mode, so it is also what the
         // README screenshots show — a stale value here ships a screenshot
