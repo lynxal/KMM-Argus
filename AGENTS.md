@@ -28,6 +28,7 @@ A KMP in-app debug tooling library that embeds a Ktor server to serve a web UI o
 ```
 
 - `./gradlew :sample:check` runs both release-gate tasks plus `:verifyVersionPins` (the root project has no `check` of its own).
+- `scripts/verify-package-swift.sh` checks the `Package.swift` checksum against the asset its url names. `:verifyVersionPins` can only check the checksum's *shape* — at version-bump time the asset does not exist yet — so this is what catches a forgotten step 7. `Verify Package.swift` runs it on every push to `main` and weekly; it passes quietly while the asset is unpublished.
 - `ARGUS_SKIP_IOS_SMOKE=true` skips `ArgusSmokeTest` on CI (flaky Ktor/CIO stdout interleaving with KGP test reporter).
 - `configuration-cache=false` in gradle.properties — do not re-enable.
 
